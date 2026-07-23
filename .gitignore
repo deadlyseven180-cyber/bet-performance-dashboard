@@ -1,0 +1,27 @@
+# Dependencies & build output
+node_modules/
+dist/
+build/
+coverage/
+
+# ── Secrets — never commit these ──────────────────────────────
+# Env files anywhere in the tree
+.env
+.env.*
+!.env.example
+# Google OAuth tokens (they live in server/data/) — match at any depth
+tokens.json
+**/tokens.json
+**/data/tokens.json
+*.sqlite
+**/data/*.sqlite
+# Service-account key files
+credentials/
+**/service-account*.json
+
+# Misc
+*.local
+.DS_Store
+*.log
+npm-debug.log*
+.vscode/

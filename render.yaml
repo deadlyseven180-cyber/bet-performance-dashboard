@@ -1,0 +1,36 @@
+# Render.com blueprint — deploys the whole app (API + built UI) as ONE web
+# service on a single public URL. Import this repo at https://render.com →
+# "New +" → "Blueprint", then fill the env vars marked sync:false.
+services:
+  - type: web
+    name: bet-performance-dashboard
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_SOURCE
+        value: oauth
+      # Your spreadsheet + tab (already wired for you)
+      - key: SPREADSHEET_ID
+        value: 1jHebDeeltsYmRQw4j9VAU9qfvUuT0jtBwX49PFrHJOg
+      - key: WORKSHEET_NAME
+        value: Non Promo Tracker
+      # ── Secrets: set these in the Render dashboard (never commit them) ──
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      # Durable Google grant so the app reads the sheet without re-login.
+      - key: GOOGLE_REFRESH_TOKEN
+        sync: false
+      # Shared password that viewers must enter to open the dashboard.
+      - key: APP_PASSWORD
+        sync: false
+      # Signs session cookies — Render generates a strong random value.
+      - key: SESSION_SECRET
+        generateValue: true
