@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Filter, Search, X, SlidersHorizontal } from 'lucide-react';
+import { Filter, Search, X, SlidersHorizontal, CalendarDays } from 'lucide-react';
 import clsx from 'clsx';
 import { useData } from '@/context/DataContext';
 import { distinctValues, STATUS_OPTIONS } from '@/services/analytics';
 import { countActiveFilters } from '@/services/filters';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { STATUS_LABEL } from '@/utils/format';
-import type { BetStatus } from '@/types';
+import { currentMonthRange, type BetStatus } from '@/types';
 
 export function GlobalFilterBar() {
   const { bets, filters, setFilters, resetFilters } = useData();
@@ -22,6 +22,8 @@ export function GlobalFilterBar() {
   }), [bets]);
 
   const active = countActiveFilters(filters);
+  const cm = currentMonthRange();
+  const isCurrentMonth = filters.dateFrom === cm.from && filters.dateTo === cm.to;
 
   return (
     <div className="border-b border-slate-200 bg-white/60 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/40 sm:px-6">
@@ -51,6 +53,25 @@ export function GlobalFilterBar() {
           className="input w-auto"
           title="To date"
         />
+
+        {/* Quick date presets — the dashboard defaults to the current month. */}
+        <button
+          onClick={() => {
+            const { from, to } = currentMonthRange();
+            setFilters((f) => ({ ...f, dateFrom: from, dateTo: to }));
+          }}
+          className={clsx('btn-ghost px-2.5 py-2 text-xs', isCurrentMonth && 'border-brand-300 text-brand-700 dark:border-brand-500/40 dark:text-brand-300')}
+          title="Show only the current month"
+        >
+          <CalendarDays className="h-4 w-4" /> This month
+        </button>
+        <button
+          onClick={() => setFilters((f) => ({ ...f, dateFrom: null, dateTo: null }))}
+          className={clsx('btn-ghost px-2.5 py-2 text-xs', !filters.dateFrom && !filters.dateTo && 'border-brand-300 text-brand-700 dark:border-brand-500/40 dark:text-brand-300')}
+          title="Show all dates"
+        >
+          All time
+        </button>
 
         <button
           onClick={() => setExpanded((e) => !e)}

@@ -72,4 +72,27 @@ export const EMPTY_FILTERS: Filters = {
   search: '',
 };
 
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/** First and last day of the month we're currently in (local time). */
+export function currentMonthRange(): { from: string; to: string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const lastDay = new Date(y, m + 1, 0).getDate();
+  return {
+    from: `${y}-${pad(m + 1)}-01`,
+    to: `${y}-${pad(m + 1)}-${pad(lastDay)}`,
+  };
+}
+
+/**
+ * Filters the dashboard starts with: the present month. Computed lazily so a
+ * long-running tab still lands on the right month after midnight/month rollover.
+ */
+export function defaultFilters(): Filters {
+  const { from, to } = currentMonthRange();
+  return { ...EMPTY_FILTERS, dateFrom: from, dateTo: to };
+}
+
 export type Granularity = 'daily' | 'weekly' | 'monthly';

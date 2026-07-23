@@ -5,7 +5,7 @@ import {
 import { sheetsApi } from '@/api/sheets';
 import { ApiError } from '@/api/client';
 import { applyFilters } from '@/services/filters';
-import { EMPTY_FILTERS, type AppConfig, type Bet, type BetsPayload, type Filters, type SyncStatus } from '@/types';
+import { EMPTY_FILTERS, defaultFilters, type AppConfig, type Bet, type BetsPayload, type Filters, type SyncStatus } from '@/types';
 import { useToast } from '@/components/ui/Toast';
 
 interface DataState {
@@ -47,7 +47,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
 
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  // Default view = the present month.
+  const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [spreadsheetId, setSpreadsheetId] = useState<string>(() => localStorage.getItem('spreadsheetId') ?? '');
   const [worksheet, setWorksheet] = useState<string>(() => localStorage.getItem('worksheet') ?? '');
   const [autoRefresh, setAutoRefresh] = useState<boolean>(() => localStorage.getItem('autoRefresh') === '1');
