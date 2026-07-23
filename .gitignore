@@ -25,3 +25,5 @@ credentials/
 *.log
 npm-debug.log*
 .vscode/
+
+.deploy-token
