@@ -7,7 +7,21 @@ const compactCurrency = new Intl.NumberFormat('en-AU', {
   style: 'currency', currency: 'AUD', notation: 'compact', maximumFractionDigits: 1,
 });
 
+const currencyWhole = new Intl.NumberFormat('en-AU', {
+  style: 'currency', currency: 'AUD', maximumFractionDigits: 0,
+});
+
 export const money = (n: number): string => currencyFmt.format(Number.isFinite(n) ? n : 0);
+
+/**
+ * Currency for large headline figures (KPI cards). Cents are noise once you're
+ * in the thousands and they make the number too wide for a card, so drop them
+ * above $1,000 and keep full precision below.
+ */
+export const moneyKpi = (n: number): string => {
+  const v = Number.isFinite(n) ? n : 0;
+  return Math.abs(v) >= 1000 ? currencyWhole.format(v) : currencyFmt.format(v);
+};
 export const moneyCompact = (n: number): string => compactCurrency.format(Number.isFinite(n) ? n : 0);
 export const signedMoney = (n: number): string => (n > 0 ? '+' : '') + money(n);
 

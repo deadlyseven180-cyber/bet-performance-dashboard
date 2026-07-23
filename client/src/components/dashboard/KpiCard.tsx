@@ -37,9 +37,14 @@ export function KpiCard({
         )}
       </div>
       {loading ? (
-        <Skeleton className="mt-3 h-7 w-24" />
+        <Skeleton className="mt-3 h-6 w-24" />
       ) : (
-        <p className={clsx('mt-2 text-2xl font-bold tabular-nums', toneStyles)}>{value}</p>
+        <p
+          title={value}
+          className={clsx('mt-2 truncate text-lg font-bold leading-tight tabular-nums sm:text-xl', toneStyles)}
+        >
+          {value}
+        </p>
       )}
       {sub && !loading && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{sub}</p>}
     </div>

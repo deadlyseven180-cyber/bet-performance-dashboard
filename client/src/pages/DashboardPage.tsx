@@ -8,7 +8,7 @@ import { RankingTable } from '@/components/rankings/RankingTable';
 import { ProfitOverTimeChart } from '@/charts/ProfitOverTimeChart';
 import { ProfitByGroupChart } from '@/charts/ProfitByGroupChart';
 import { WinRateByTypeChart } from '@/charts/WinRateByTypeChart';
-import { money, profitColor } from '@/utils/format';
+import { moneyKpi, profitColor } from '@/utils/format';
 import type { Granularity } from '@/types';
 
 export function DashboardPage() {
@@ -16,8 +16,8 @@ export function DashboardPage() {
   const [gran, setGran] = useState<Granularity>('daily');
 
   const insights = [
-    { label: 'Largest Win', value: money(a.kpis.largestWin), icon: ArrowUpRight, cls: 'text-emerald-500' },
-    { label: 'Largest Loss', value: money(a.kpis.largestLoss), icon: ArrowDownRight, cls: 'text-rose-500' },
+    { label: 'Largest Win', value: moneyKpi(a.kpis.largestWin), icon: ArrowUpRight, cls: 'text-emerald-500' },
+    { label: 'Largest Loss', value: moneyKpi(a.kpis.largestLoss), icon: ArrowDownRight, cls: 'text-rose-500' },
     { label: 'Longest Win Streak', value: `${a.kpis.longestWinStreak} bets`, icon: Flame, cls: 'text-amber-500' },
     { label: 'Longest Loss Streak', value: `${a.kpis.longestLossStreak} bets`, icon: Snowflake, cls: 'text-sky-500' },
   ];
@@ -33,12 +33,17 @@ export function DashboardPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {insights.map((it) => (
           <div key={it.label} className="card flex items-center gap-3 p-4">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
               <it.icon className={`h-5 w-5 ${it.cls}`} />
             </span>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs text-slate-500 dark:text-slate-400">{it.label}</p>
-              <p className={`text-lg font-bold ${it.label.includes('Loss') && it.label.includes('Largest') ? profitColor(a.kpis.largestLoss) : 'text-slate-800 dark:text-slate-100'}`}>{it.value}</p>
+              <p
+                title={it.value}
+                className={`truncate text-base font-bold tabular-nums ${it.label.includes('Loss') && it.label.includes('Largest') ? profitColor(a.kpis.largestLoss) : 'text-slate-800 dark:text-slate-100'}`}
+              >
+                {it.value}
+              </p>
             </div>
           </div>
         ))}
