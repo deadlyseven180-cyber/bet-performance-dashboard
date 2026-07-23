@@ -15,11 +15,11 @@ services:
         value: production
       - key: DATA_SOURCE
         value: oauth
-      # Your spreadsheet + tab (already wired for you)
+      # Your spreadsheet + tab — set in the dashboard so they aren't public.
       - key: SPREADSHEET_ID
-        value: 1jHebDeeltsYmRQw4j9VAU9qfvUuT0jtBwX49PFrHJOg
+        sync: false
       - key: WORKSHEET_NAME
-        value: Non Promo Tracker
+        sync: false
       # ── Secrets: set these in the Render dashboard (never commit them) ──
       - key: GOOGLE_CLIENT_ID
         sync: false
