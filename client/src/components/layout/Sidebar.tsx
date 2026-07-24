@@ -37,9 +37,16 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
             {/* Drawn mark rather than a stock icon */}
             <svg viewBox="0 0 32 32" className="h-7 w-7 shrink-0" aria-hidden>
               <rect width="32" height="32" rx="3" className="fill-slate-900 dark:fill-slate-800" />
-              <rect x="5" y="18" width="4" height="9" className="fill-brand-400" />
-              <rect x="12" y="12" width="4" height="15" className="fill-brand-400" />
-              <rect x="19" y="7" width="4" height="20" className="fill-brand-400" />
+              <path d="M12.2 4h7.6l-2.2 4.4h-3.2z" className="fill-brand-400" />
+              <path
+                d="M13.6 8.9C9 11.5 5.8 16.1 5.8 20.3 5.8 24.7 10.4 28 16 28s10.2-3.3 10.2-7.7c0-4.2-3.2-8.8-7.8-11.4z"
+                className="fill-brand-400"
+              />
+              <path d="M16 13.8v10.6" strokeWidth="1.8" strokeLinecap="round" className="stroke-slate-900 dark:stroke-slate-800" />
+              <path
+                d="M18.9 16.5c0-1.2-1.3-2.1-2.9-2.1s-2.9.9-2.9 2.1 1.3 1.8 2.9 2.2 2.9 1 2.9 2.2-1.3 2.1-2.9 2.1-2.9-.9-2.9-2.1"
+                fill="none" strokeWidth="1.8" strokeLinecap="round" className="stroke-slate-900 dark:stroke-slate-800"
+              />
             </svg>
             <div className="min-w-0 leading-tight">
               <p className="truncate text-[13px] font-semibold tracking-tight text-slate-800 dark:text-slate-100">
