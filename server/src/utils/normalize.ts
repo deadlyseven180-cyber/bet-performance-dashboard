@@ -305,6 +305,7 @@ export function normalizeRows(rows: string[][]): NormalizeResult {
 
   const bets: Bet[] = [];
   let skippedCashflow = 0;
+  let skippedBlank = 0;
   for (let r = headerRowIdx + 1; r < rows.length; r++) {
     const row = rows[r];
     if (!row || row.every((c) => String(c ?? '').trim() === '')) continue;
@@ -335,6 +336,14 @@ export function normalizeRows(rows: string[][]): NormalizeResult {
     const { profit, returnAmount } = reconcileMoney(
       status, stake, odds, profit0, return0, hasProfit, hasReturn,
     );
+
+    // Structurally empty row (a spacer or stray cell): nothing identifies a
+    // bet and there is no money attached, so it would only ever show up as an
+    // "Unknown" line with zeros.
+    if (!get(row, 'selection') && !get(row, 'event') && stake === 0 && profit === 0 && returnAmount === 0) {
+      skippedBlank++;
+      continue;
+    }
 
     const extra: Record<string, string> = {};
     headers.forEach((h, i) => {
@@ -369,6 +378,9 @@ export function normalizeRows(rows: string[][]): NormalizeResult {
 
   if (skippedCashflow > 0) {
     warnings.push(`Ignored ${skippedCashflow} non-bet row(s) (deposits/withdrawals/bank).`);
+  }
+  if (skippedBlank > 0) {
+    warnings.push(`Ignored ${skippedBlank} empty row(s).`);
   }
   if (!bets.length) warnings.push('No data rows found beneath the header row.');
   return { bets, warnings };

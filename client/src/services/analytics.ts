@@ -143,11 +143,20 @@ export function groupDuplicateBets(bets: Bet[]): BetGroup[] {
       }
       const units = exactOrder.map((s) => collapse(exact.get(s)!));
 
-      // Variants merge only when they all settled the same way; a mixed result
-      // means it was a ladder of separate bets.
-      const statuses = new Set(units.map((u) => u.status));
-      if (units.length > 1 && statuses.size === 1) out.push(collapse(cluster));
-      else out.push(...units);
+      /*
+       * Merge the variants by outcome rather than all-or-nothing. Two sides of
+       * the same line can appear in one cluster — "Jones u21.5" won while
+       * "Jones o21.5" lost — and those are opposite bets that must never
+       * combine. Everything that settled the same way is the one bet taken at
+       * whatever line was available, so it collapses together.
+       */
+      const byStatus = new Map<string, Bet[]>();
+      const statusOrder: string[] = [];
+      for (const u of units) {
+        if (!byStatus.has(u.status)) { byStatus.set(u.status, []); statusOrder.push(u.status); }
+        byStatus.get(u.status)!.push(...(u as BetGroup).members);
+      }
+      for (const s of statusOrder) out.push(collapse(byStatus.get(s)!));
     }
   }
 
