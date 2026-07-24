@@ -10,8 +10,100 @@ import type { Bet, BetStatus, Granularity } from '@/types';
 const isSettled = (b: Bet) => b.status === 'won' || b.status === 'lost' || b.status === 'void';
 const isDecided = (b: Bet) => b.status === 'won' || b.status === 'lost'; // excludes void for win rate
 
+// ── De-duplication of the same bet placed multiple times ─────────────────
+/**
+ * Strip line/threshold markers so "Cameron 18+" and "Cameron 19+" normalise to
+ * the same selection ("cameron"). Used to spot the case where one tip was
+ * placed at whatever line each book had available.
+ */
+function normalizeSelection(s: string): string {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/\d+(\.\d+)?\s*\+/g, ' ')        // 18+, 19+
+    .replace(/\b[ou]\s*\d+(\.\d+)?\b/g, ' ')  // u18.5, o6.5
+    .replace(/\d+(\.\d+)?/g, ' ')             // any remaining numbers
+    .replace(/[^a-z/ ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** One logical bet, possibly placed across several accounts/lines. */
+export interface BetGroup extends Bet {
+  /** How many spreadsheet rows this logical bet came from. */
+  placements: number;
+}
+
+function collapse(rows: Bet[]): BetGroup {
+  const counts: Record<string, number> = {};
+  for (const r of rows) counts[r.status] = (counts[r.status] ?? 0) + 1;
+  const status = (Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? rows[0].status) as Bet['status'];
+  return {
+    ...rows[0],
+    status,
+    // Money is the real total across every placement — never de-duplicated.
+    stake: rows.reduce((s, r) => s + r.stake, 0),
+    returnAmount: rows.reduce((s, r) => s + r.returnAmount, 0),
+    profit: rows.reduce((s, r) => s + r.profit, 0),
+    placements: rows.length,
+  };
+}
+
+/**
+ * Collapse repeated placements of the same bet into one logical bet.
+ *
+ * Rule (chosen deliberately):
+ *  1. Adjacent rows on the same date with an IDENTICAL selection are always
+ *     one bet — the same tip staked across several accounts.
+ *  2. Adjacent rows that differ only by line ("Cameron 18+" vs "Cameron 19+")
+ *     are merged ONLY if every one of them settled the same way. When the
+ *     outcomes disagree it's a deliberate ladder (e.g. Bailey 2+ won while
+ *     3+/4+/5+ lost), which is genuinely several bets and is left intact.
+ *
+ * Only counts and win rate are affected; stakes and profits are summed, so
+ * money totals are identical either way.
+ */
+export function groupDuplicateBets(bets: Bet[]): BetGroup[] {
+  if (bets.length === 0) return [];
+  const out: BetGroup[] = [];
+
+  const flushVariantRun = (run: Bet[]) => {
+    // Split the run into blocks of identical selection text.
+    const exactBlocks: Bet[][] = [];
+    let block: Bet[] = [run[0]];
+    for (let i = 1; i < run.length; i++) {
+      if (run[i].selection === run[i - 1].selection) block.push(run[i]);
+      else { exactBlocks.push(block); block = [run[i]]; }
+    }
+    exactBlocks.push(block);
+
+    const units = exactBlocks.map(collapse);
+    const statuses = new Set(units.map((u) => u.status));
+    if (units.length > 1 && statuses.size === 1) {
+      // Same bet at different lines, all settled alike → one bet.
+      out.push(collapse(run));
+    } else {
+      out.push(...units);
+    }
+  };
+
+  let run: Bet[] = [bets[0]];
+  for (let i = 1; i < bets.length; i++) {
+    const prev = bets[i - 1];
+    const cur = bets[i];
+    const sel = normalizeSelection(cur.selection);
+    const sameBet = Boolean(cur.date) && cur.date === prev.date && sel !== '' && sel === normalizeSelection(prev.selection);
+    if (sameBet) run.push(cur);
+    else { flushVariantRun(run); run = [cur]; }
+  }
+  flushVariantRun(run);
+  return out;
+}
+
 export interface Kpis {
+  /** Logical bets (repeat placements of the same bet collapsed). */
   totalBets: number;
+  /** Raw spreadsheet rows behind those bets. */
+  placements: number;
   pending: number;
   won: number;
   lost: number;
@@ -31,17 +123,35 @@ export interface Kpis {
   longestLossStreak: number;
 }
 
-export function computeKpis(bets: Bet[]): Kpis {
-  let won = 0, lost = 0, voidCount = 0, pending = 0;
+/**
+ * @param rows   every spreadsheet row — the source of truth for all money.
+ * @param groups logical bets (duplicate placements collapsed). Counts, win
+ *               rate and streaks are derived from these so the same bet
+ *               staked across five accounts counts once. Defaults to `rows`.
+ */
+export function computeKpis(rows: Bet[], groups?: Bet[]): Kpis {
+  const units = groups ?? rows;
+
+  // ── Money: always from the raw rows, never de-duplicated ──
   let totalStake = 0, settledStake = 0, pendingStake = 0;
   let totalReturns = 0, netProfit = 0;
   let oddsSum = 0, oddsCount = 0;
-  let largestWin = 0, largestLoss = 0;
-
-  for (const b of bets) {
+  for (const b of rows) {
     totalStake += b.stake;
     if (b.odds > 0) { oddsSum += b.odds; oddsCount++; }
+    if (b.status === 'pending' || b.status === 'unknown') {
+      pendingStake += b.stake;
+    } else {
+      settledStake += b.stake;
+      totalReturns += b.returnAmount;
+      netProfit += b.profit;
+    }
+  }
 
+  // ── Counts & win rate: from logical bets ──
+  let won = 0, lost = 0, voidCount = 0, pending = 0;
+  let largestWin = 0, largestLoss = 0;
+  for (const b of units) {
     switch (b.status) {
       case 'won': won++; break;
       case 'lost': lost++; break;
@@ -49,13 +159,7 @@ export function computeKpis(bets: Bet[]): Kpis {
       case 'pending': pending++; break;
       default: break;
     }
-
-    if (b.status === 'pending' || b.status === 'unknown') {
-      pendingStake += b.stake;
-    } else {
-      settledStake += b.stake;
-      totalReturns += b.returnAmount;
-      netProfit += b.profit;
+    if (b.status !== 'pending' && b.status !== 'unknown') {
       if (b.profit > largestWin) largestWin = b.profit;
       if (b.profit < largestLoss) largestLoss = b.profit;
     }
@@ -65,10 +169,11 @@ export function computeKpis(bets: Bet[]): Kpis {
   const winRate = decided > 0 ? (won / decided) * 100 : 0;
   const roi = settledStake > 0 ? (netProfit / settledStake) * 100 : 0;
 
-  const { longestWinStreak, longestLossStreak } = computeStreaks(bets);
+  const { longestWinStreak, longestLossStreak } = computeStreaks(units);
 
   return {
-    totalBets: bets.length,
+    totalBets: units.length,
+    placements: rows.length,
     pending, won, lost, void: voidCount,
     winRate,
     totalStake,
@@ -78,7 +183,8 @@ export function computeKpis(bets: Bet[]): Kpis {
     netProfit,
     roi,
     avgOdds: oddsCount > 0 ? oddsSum / oddsCount : 0,
-    avgStake: bets.length > 0 ? totalStake / bets.length : 0,
+    // Average per placement — that's the amount actually put on each time.
+    avgStake: rows.length > 0 ? totalStake / rows.length : 0,
     largestWin,
     largestLoss,
     longestWinStreak,
@@ -178,22 +284,30 @@ export function groupBy(bets: Bet[], field: keyof Bet): GroupStat[] {
 
   const stats: GroupStat[] = [];
   for (const [key, group] of map) {
-    let won = 0, lost = 0, settled = 0, stake = 0, returns = 0, profit = 0, oddsSum = 0, oddsCount = 0;
+    let stake = 0, returns = 0, profit = 0, oddsSum = 0, oddsCount = 0;
     for (const b of group) {
       stake += b.stake;
       if (b.odds > 0) { oddsSum += b.odds; oddsCount++; }
       if (isSettled(b)) {
-        settled++;
         returns += b.returnAmount;
         profit += b.profit;
-        if (b.status === 'won') won++;
-        if (b.status === 'lost') lost++;
+      }
+    }
+    // Counts/win-rate use logical bets so one tip spread over several accounts
+    // isn't counted repeatedly. Money above still comes from every row.
+    const units = groupDuplicateBets(group);
+    let won = 0, lost = 0, settled = 0;
+    for (const u of units) {
+      if (isSettled(u)) {
+        settled++;
+        if (u.status === 'won') won++;
+        if (u.status === 'lost') lost++;
       }
     }
     const decided = won + lost;
     stats.push({
       key,
-      bets: group.length,
+      bets: units.length,
       settled,
       won,
       lost,

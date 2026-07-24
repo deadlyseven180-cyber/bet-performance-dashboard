@@ -48,7 +48,7 @@ export function HistoryPage() {
 
       <SectionCard
         title="Bet History"
-        subtitle={`${filteredBets.length.toLocaleString()} of ${bets.length.toLocaleString()} records • read-only • use the filter bar above to refine`}
+        subtitle={`${filteredBets.length.toLocaleString()} of ${bets.length.toLocaleString()} rows • ${a.kpis.totalBets.toLocaleString()} logical bets after merging repeat placements • read-only`}
         action={
           <button className="btn-ghost text-xs" onClick={onExport} disabled={busy}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} CSV

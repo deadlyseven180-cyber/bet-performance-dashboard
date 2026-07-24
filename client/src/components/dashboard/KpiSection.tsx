@@ -33,7 +33,7 @@ export function KpiSection({ kpis, prev, loading }: { kpis: Kpis; prev?: Kpis | 
         <HeroCard
           label="Win Rate"
           value={percent(kpis.winRate)}
-          sub={`${fmtNum(kpis.won)} of ${fmtNum(kpis.won + kpis.lost)} decided`}
+          sub={`${fmtNum(kpis.won)} of ${fmtNum(kpis.won + kpis.lost)} decided bets`}
           compare={prev ? { current: kpis.winRate, previous: prev.winRate, kind: 'points' } : undefined}
           loading={loading}
         />
@@ -135,7 +135,12 @@ function SettlementCard({ kpis, loading }: { kpis: Kpis; loading?: boolean }) {
     <div className="card p-4">
       <div className="mb-3 flex items-baseline justify-between">
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Settlement</p>
-        <p className="text-xs text-slate-400">{fmtNum(kpis.totalBets)} bets</p>
+        <p className="text-xs text-slate-400" title="Repeat placements of the same bet across accounts are counted once">
+          {fmtNum(kpis.totalBets)} bets
+          {kpis.placements > kpis.totalBets && (
+            <span className="text-slate-300 dark:text-slate-600"> · {fmtNum(kpis.placements)} placements</span>
+          )}
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
