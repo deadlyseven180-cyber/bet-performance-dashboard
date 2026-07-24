@@ -86,6 +86,21 @@ function isTokenPrefix(short: string, long: string): boolean {
   return next === ' ' || next === '/';
 }
 
+/**
+ * Stable identity for a grouped bet — date + service + sport + the shortest
+ * selection key among its members (the cluster root). Row ids shift as the
+ * live sheet grows, so this content-based key is what per-bet settings (e.g. a
+ * manual unit multiplier) are persisted against.
+ */
+export function betGroupKey(g: BetGroup): string {
+  let shortest = '';
+  for (const m of g.members) {
+    const k = selectionKey(m.selection);
+    if (!shortest || k.length < shortest.length) shortest = k;
+  }
+  return `${g.date ?? ''}|${g.service}|${g.sport}|${shortest}`;
+}
+
 export function groupDuplicateBets(bets: Bet[]): BetGroup[] {
   if (bets.length === 0) return [];
 
