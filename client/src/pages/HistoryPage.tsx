@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { useData } from '@/context/DataContext';
 import { useAnalytics } from '@/hooks/useAnalytics';
-import { SectionCard } from '@/components/ui/primitives';
+import { SectionCard, Segmented } from '@/components/ui/primitives';
 import { BetHistoryTable } from '@/components/history/BetHistoryTable';
 import { ErrorBanner } from '@/components/dashboard/StatusBanners';
 import { useToast } from '@/components/ui/Toast';
@@ -13,6 +13,7 @@ export function HistoryPage() {
   const a = useAnalytics();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<'grouped' | 'rows'>('grouped');
 
   // Export libs are heavy (~380KB) — load them only when actually exporting.
   const onExport = async () => {
@@ -48,15 +49,24 @@ export function HistoryPage() {
 
       <SectionCard
         title="Bet History"
-        subtitle={`${filteredBets.length.toLocaleString()} of ${bets.length.toLocaleString()} rows • ${a.kpis.totalBets.toLocaleString()} logical bets after merging repeat placements • read-only`}
+        subtitle={view === 'grouped'
+          ? `${a.kpis.totalBets.toLocaleString()} bets · repeat placements merged · expand a row to see them`
+          : `${filteredBets.length.toLocaleString()} of ${bets.length.toLocaleString()} raw sheet rows`}
         action={
+          <div className="flex items-center gap-2">
+            <Segmented
+              value={view}
+              onChange={setView}
+              options={[{ value: 'grouped' as const, label: 'Bets' }, { value: 'rows' as const, label: 'All rows' }]}
+            />
           <button className="btn-ghost text-xs" onClick={onExport} disabled={busy}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} CSV
           </button>
+          </div>
         }
         bodyClassName="pt-2"
       >
-        <BetHistoryTable bets={filteredBets} dims={a.dims} />
+        <BetHistoryTable bets={filteredBets} dims={a.dims} grouped={view === 'grouped' ? a.logicalBets : undefined} />
       </SectionCard>
     </div>
   );

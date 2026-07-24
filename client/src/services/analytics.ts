@@ -31,6 +31,8 @@ function normalizeSelection(s: string): string {
 export interface BetGroup extends Bet {
   /** How many spreadsheet rows this logical bet came from. */
   placements: number;
+  /** The individual rows behind it, for display/audit. */
+  members: Bet[];
 }
 
 function collapse(rows: Bet[]): BetGroup {
@@ -45,6 +47,7 @@ function collapse(rows: Bet[]): BetGroup {
     returnAmount: rows.reduce((s, r) => s + r.returnAmount, 0),
     profit: rows.reduce((s, r) => s + r.profit, 0),
     placements: rows.length,
+    members: rows,
   };
 }
 
@@ -64,38 +67,41 @@ function collapse(rows: Bet[]): BetGroup {
  */
 export function groupDuplicateBets(bets: Bet[]): BetGroup[] {
   if (bets.length === 0) return [];
-  const out: BetGroup[] = [];
 
-  const flushVariantRun = (run: Bet[]) => {
-    // Split the run into blocks of identical selection text.
-    const exactBlocks: Bet[][] = [];
-    let block: Bet[] = [run[0]];
-    for (let i = 1; i < run.length; i++) {
-      if (run[i].selection === run[i - 1].selection) block.push(run[i]);
-      else { exactBlocks.push(block); block = [run[i]]; }
-    }
-    exactBlocks.push(block);
-
-    const units = exactBlocks.map(collapse);
-    const statuses = new Set(units.map((u) => u.status));
-    if (units.length > 1 && statuses.size === 1) {
-      // Same bet at different lines, all settled alike → one bet.
-      out.push(collapse(run));
-    } else {
-      out.push(...units);
-    }
-  };
-
-  let run: Bet[] = [bets[0]];
-  for (let i = 1; i < bets.length; i++) {
-    const prev = bets[i - 1];
-    const cur = bets[i];
-    const sel = normalizeSelection(cur.selection);
-    const sameBet = Boolean(cur.date) && cur.date === prev.date && sel !== '' && sel === normalizeSelection(prev.selection);
-    if (sameBet) run.push(cur);
-    else { flushVariantRun(run); run = [cur]; }
+  // Bucket by date + service + sport + normalised selection. Keying (rather
+  // than requiring rows to be neighbours) means a group is still detected when
+  // the sheet has other bets interleaved between its placements.
+  const buckets = new Map<string, Bet[]>();
+  const order: string[] = [];
+  for (const b of bets) {
+    const sel = normalizeSelection(b.selection);
+    // A row with no usable selection can't be matched to anything — keep it
+    // standalone rather than lumping blank selections together.
+    const key = sel ? `${b.date ?? ''}|${b.service}|${b.sport}|${sel}` : `solo:${b.id}`;
+    if (!buckets.has(key)) { buckets.set(key, []); order.push(key); }
+    buckets.get(key)!.push(b);
   }
-  flushVariantRun(run);
+
+  const out: BetGroup[] = [];
+  for (const key of order) {
+    const rows = buckets.get(key)!;
+
+    // Within a bucket, rows with the identical selection are unambiguously the
+    // same bet (staked across accounts) and always collapse together.
+    const exact = new Map<string, Bet[]>();
+    const exactOrder: string[] = [];
+    for (const r of rows) {
+      if (!exact.has(r.selection)) { exact.set(r.selection, []); exactOrder.push(r.selection); }
+      exact.get(r.selection)!.push(r);
+    }
+    const units = exactOrder.map((s) => collapse(exact.get(s)!));
+
+    // Different lines of the same selection merge only when they all settled
+    // the same way; a mixed result means it was a ladder of separate bets.
+    const statuses = new Set(units.map((u) => u.status));
+    if (units.length > 1 && statuses.size === 1) out.push(collapse(rows));
+    else out.push(...units);
+  }
   return out;
 }
 

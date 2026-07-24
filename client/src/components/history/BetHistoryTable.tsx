@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Inbox, Sparkles } from 'lucide-react';
 import type { Bet } from '@/types';
-import type { Dimensions } from '@/services/analytics';
+import type { Dimensions, BetGroup } from '@/services/analytics';
 import { formatDate, money, decimalOdds, STATUS_LABEL, STATUS_STYLE, profitColor } from '@/utils/format';
 import { EmptyState } from '@/components/ui/primitives';
 
@@ -34,7 +34,7 @@ const COLS: Col[] = [
 
 const PAGE_SIZES = [25, 50, 100];
 
-export function BetHistoryTable({ bets, dims }: { bets: Bet[]; dims: Dimensions }) {
+export function BetHistoryTable({ bets, dims, grouped }: { bets: Bet[]; dims: Dimensions; grouped?: BetGroup[] }) {
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [dir, setDir] = useState<Dir>('desc');
   const [page, setPage] = useState(0);
@@ -44,8 +44,9 @@ export function BetHistoryTable({ bets, dims }: { bets: Bet[]; dims: Dimensions 
   // Only render columns whose underlying data actually exists in this sheet.
   const cols = useMemo(() => COLS.filter((c) => !c.dim || dims[c.dim]), [dims]);
 
+  const source: Bet[] = grouped ?? bets;
   const sorted = useMemo(() => {
-    const copy = [...bets];
+    const copy = [...source];
     copy.sort((a, b) => {
       const av = a[sortKey];
       const bv = b[sortKey];
@@ -55,7 +56,7 @@ export function BetHistoryTable({ bets, dims }: { bets: Bet[]; dims: Dimensions 
       return dir === 'asc' ? cmp : -cmp;
     });
     return copy;
-  }, [bets, sortKey, dir]);
+  }, [source, sortKey, dir]);
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const current = Math.min(page, pageCount - 1);
@@ -67,7 +68,7 @@ export function BetHistoryTable({ bets, dims }: { bets: Bet[]; dims: Dimensions 
     setPage(0);
   };
 
-  if (!bets.length) {
+  if (!source.length) {
     return <EmptyState icon={<Inbox className="h-10 w-10" />} title="No bets found" message="No records match your current filters or search." />;
   }
 
@@ -88,6 +89,29 @@ export function BetHistoryTable({ bets, dims }: { bets: Bet[]; dims: Dimensions 
           {b.status === 'pending' ? '—' : `${b.profit > 0 ? '+' : ''}${money(b.profit)}`}
         </span>
       );
+      case 'selection': {
+        const v = String(b.selection ?? '');
+        const n = (b as BetGroup).placements ?? 1;
+        return (
+          <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+            <span className="truncate" title={v}>{v || '—'}</span>
+            {n > 1 && (
+              <span
+                className="chip shrink-0 bg-brand-400/15 text-brand-600 dark:text-brand-400"
+                title={`${n} placements merged into one bet`}
+              >×{n}</span>
+            )}
+          </span>
+        );
+      }
+      case 'account': {
+        const m = (b as BetGroup).members;
+        if (m && m.length > 1) {
+          const uniq = new Set(m.map((x) => x.account));
+          if (uniq.size > 1) return <span className="text-slate-400">{uniq.size} accounts</span>;
+        }
+        return <span className="text-slate-600 dark:text-slate-300">{b.account || '—'}</span>;
+      }
       default: {
         const v = String(b[key] ?? '');
         return <span className="text-slate-600 dark:text-slate-300" title={v}>{v || '—'}</span>;
@@ -195,7 +219,9 @@ export function BetHistoryTable({ bets, dims }: { bets: Bet[]; dims: Dimensions 
                 {expanded === b.id && (
                   <tr className="border-b border-slate-100 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/40">
                     <td colSpan={cols.length} className="px-3 py-3">
-                      <BetDetail bet={b} />
+                      {((b as BetGroup).members?.length ?? 0) > 1
+                        ? <PlacementList group={b as BetGroup} />
+                        : <BetDetail bet={b} />}
                     </td>
                   </tr>
                 )}
@@ -281,5 +307,36 @@ function BetDetail({ bet }: { bet: Bet }) {
         </div>
       )}
     </dl>
+  );
+}
+
+/** The individual sheet rows that were merged into one logical bet. */
+function PlacementList({ group }: { group: BetGroup }) {
+  return (
+    <div>
+      <p className="label-micro mb-2">
+        {group.placements} placements merged into one bet · totals {money(group.stake)} staked ·{' '}
+        <span className={profitColor(group.profit)}>{group.profit > 0 ? '+' : ''}{money(group.profit)}</span>
+      </p>
+      <table className="w-full text-xs">
+        <tbody>
+          {group.members.map((m) => (
+            <tr key={m.id} className="border-t border-slate-100 dark:border-slate-800/60">
+              <td className="py-1.5 pr-3 text-slate-500 dark:text-slate-400">{m.account || '—'}</td>
+              <td className="py-1.5 pr-3 text-slate-500 dark:text-slate-400">{m.betPlatform || '—'}</td>
+              <td className="py-1.5 pr-3 text-slate-600 dark:text-slate-300">{m.selection}</td>
+              <td className="py-1.5 pr-3 text-right tabular-nums text-slate-500">{money(m.stake)}</td>
+              <td className="py-1.5 pr-3 text-right tabular-nums text-slate-500">{decimalOdds(m.odds)}</td>
+              <td className="py-1.5 pr-3">
+                <span className={clsx('chip', STATUS_STYLE[m.status])}>{STATUS_LABEL[m.status]}</span>
+              </td>
+              <td className={clsx('py-1.5 text-right tabular-nums font-semibold', profitColor(m.profit))}>
+                {m.profit > 0 ? '+' : ''}{money(m.profit)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
