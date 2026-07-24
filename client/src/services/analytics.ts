@@ -79,43 +79,82 @@ function collapse(rows: Bet[]): BetGroup {
  * Only counts and win rate are affected; stakes and profits are summed, so
  * money totals are identical either way.
  */
+/** True when `long` extends `short` at a token boundary ("a b" ⊂ "a b/c"). */
+function isTokenPrefix(short: string, long: string): boolean {
+  if (long.length <= short.length || !long.startsWith(short)) return false;
+  const next = long[short.length];
+  return next === ' ' || next === '/';
+}
+
 export function groupDuplicateBets(bets: Bet[]): BetGroup[] {
   if (bets.length === 0) return [];
 
-  // Bucket by date + service + sport + normalised selection. Keying (rather
-  // than requiring rows to be neighbours) means a group is still detected when
-  // the sheet has other bets interleaved between its placements.
-  const buckets = new Map<string, Bet[]>();
-  const order: string[] = [];
+  const indexOf = new Map<Bet, number>();
+  bets.forEach((b, i) => indexOf.set(b, i));
+
+  // Partition by the context in which two rows could plausibly be the same
+  // bet. Partitioning (rather than requiring rows to be neighbours) means a
+  // group is still found when other bets are interleaved between placements.
+  const partitions = new Map<string, Bet[]>();
+  const unmatchable: Bet[] = [];
   for (const b of bets) {
-    const sel = selectionKey(b.selection);
-    // A row with no usable selection can't be matched to anything — keep it
-    // standalone rather than lumping blank selections together.
-    const key = sel ? `${b.date ?? ''}|${b.service}|${b.sport}|${sel}` : `solo:${b.id}`;
-    if (!buckets.has(key)) { buckets.set(key, []); order.push(key); }
-    buckets.get(key)!.push(b);
+    if (!selectionKey(b.selection)) { unmatchable.push(b); continue; }
+    const p = `${b.date ?? ''}|${b.service}|${b.sport}`;
+    if (!partitions.has(p)) partitions.set(p, []);
+    partitions.get(p)!.push(b);
   }
 
   const out: BetGroup[] = [];
-  for (const key of order) {
-    const rows = buckets.get(key)!;
 
-    // Within a bucket, rows with the identical selection are unambiguously the
-    // same bet (staked across accounts) and always collapse together.
-    const exact = new Map<string, Bet[]>();
-    const exactOrder: string[] = [];
-    for (const r of rows) {
-      if (!exact.has(r.selection)) { exact.set(r.selection, []); exactOrder.push(r.selection); }
-      exact.get(r.selection)!.push(r);
+  for (const rows of partitions.values()) {
+    /*
+     * Accounts often add an extra leg to the same bet ("Gawn Most FS Melb" vs
+     * "Gawn Most FS Melb/Freo"), so exact text can't match them. Cluster keys
+     * where one is a token-prefix of another, taking the shortest as the root.
+     * Crucially this does NOT merge genuinely different multis that merely
+     * share a first leg ("Smith/Holmes/..." vs "Smith/Bruhn/..."), because
+     * neither is a prefix of the other.
+     */
+    const keys = [...new Set(rows.map((r) => selectionKey(r.selection)))].sort((a, b) => a.length - b.length);
+    const root = new Map<string, string>();
+    for (const k of keys) {
+      let found: string | null = null;
+      for (const cand of keys) {
+        if (cand === k) break; // sorted by length: only shorter keys considered
+        if (isTokenPrefix(cand, k)) { found = root.get(cand) ?? cand; break; }
+      }
+      root.set(k, found ?? k);
     }
-    const units = exactOrder.map((s) => collapse(exact.get(s)!));
 
-    // Different lines of the same selection merge only when they all settled
-    // the same way; a mixed result means it was a ladder of separate bets.
-    const statuses = new Set(units.map((u) => u.status));
-    if (units.length > 1 && statuses.size === 1) out.push(collapse(rows));
-    else out.push(...units);
+    const clusters = new Map<string, Bet[]>();
+    for (const r of rows) {
+      const k = root.get(selectionKey(r.selection))!;
+      if (!clusters.has(k)) clusters.set(k, []);
+      clusters.get(k)!.push(r);
+    }
+
+    for (const cluster of clusters.values()) {
+      // Identical selection text is unambiguously one bet across accounts.
+      const exact = new Map<string, Bet[]>();
+      const exactOrder: string[] = [];
+      for (const r of cluster) {
+        if (!exact.has(r.selection)) { exact.set(r.selection, []); exactOrder.push(r.selection); }
+        exact.get(r.selection)!.push(r);
+      }
+      const units = exactOrder.map((s) => collapse(exact.get(s)!));
+
+      // Variants merge only when they all settled the same way; a mixed result
+      // means it was a ladder of separate bets.
+      const statuses = new Set(units.map((u) => u.status));
+      if (units.length > 1 && statuses.size === 1) out.push(collapse(cluster));
+      else out.push(...units);
+    }
   }
+
+  for (const b of unmatchable) out.push(collapse([b]));
+
+  // Restore spreadsheet order using each group's earliest member.
+  out.sort((a, z) => (indexOf.get(a.members[0]) ?? 0) - (indexOf.get(z.members[0]) ?? 0));
   return out;
 }
 
