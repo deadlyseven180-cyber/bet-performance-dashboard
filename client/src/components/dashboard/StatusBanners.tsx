@@ -8,12 +8,12 @@ export function ErrorBanner() {
 
   const map: Record<string, { icon: typeof AlertTriangle; hint: string }> = {
     NETWORK: { icon: WifiOff, hint: 'Check your connection and confirm the API server is running.' },
-    NOT_FOUND: { icon: FileX, hint: 'Verify the spreadsheet ID in the Data Source page.' },
-    FORBIDDEN: { icon: ShieldAlert, hint: 'Share the sheet with your service account, or check API access.' },
-    UNAUTHENTICATED: { icon: ShieldAlert, hint: 'Reconnect your Google account from the Data Source page.' },
-    NOT_AUTHENTICATED: { icon: ShieldAlert, hint: 'Connect your Google account to continue.' },
+    NOT_FOUND: { icon: FileX, hint: 'The configured spreadsheet could not be found.' },
+    FORBIDDEN: { icon: ShieldAlert, hint: 'Access to the spreadsheet was denied.' },
+    UNAUTHENTICATED: { icon: ShieldAlert, hint: 'The Google connection needs to be re-authorised by the owner.' },
+    NOT_AUTHENTICATED: { icon: ShieldAlert, hint: 'The Google connection is not set up yet.' },
     RATE_LIMITED: { icon: Clock, hint: 'Google API limit reached — wait a moment before refreshing.' },
-    NO_SPREADSHEET: { icon: Info, hint: 'Select a spreadsheet in the Data Source page.' },
+    NO_SPREADSHEET: { icon: Info, hint: 'No spreadsheet is configured on the server.' },
   };
   const { icon: Icon, hint } = map[errorCode ?? ''] ?? { icon: AlertTriangle, hint: 'Try refreshing, or review your data source settings.' };
 

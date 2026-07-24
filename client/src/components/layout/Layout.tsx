@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { Sidebar } from './Sidebar';
+import { Sidebar, ADMIN_UI } from './Sidebar';
 import { Topbar } from './Topbar';
 import { GlobalFilterBar } from '@/components/filters/GlobalFilterBar';
 
@@ -10,7 +10,8 @@ const TITLES: Record<string, string> = {
   '/rankings': 'Rankings',
   '/history': 'Bet History',
   '/reports': 'Reports & Export',
-  '/settings': 'Data Source',
+  // '/settings' is admin-only; added below so the hosted build omits it.
+  ...(ADMIN_UI ? { '/settings': 'Data Source' } : {}),
 };
 
 export function Layout() {

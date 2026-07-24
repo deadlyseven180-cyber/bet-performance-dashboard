@@ -2,13 +2,20 @@ import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
 import { LayoutDashboard, LineChart, Trophy, Table2, FileDown, Settings, Target, X } from 'lucide-react';
 
+/**
+ * "Data Source" is an owner-only admin screen (it can re-point the app at a
+ * different spreadsheet), so it is only present when running locally in dev.
+ * The hosted/shared build omits it entirely — nav item AND route.
+ */
+export const ADMIN_UI = import.meta.env.DEV;
+
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/charts', label: 'Charts', icon: LineChart },
   { to: '/rankings', label: 'Rankings', icon: Trophy },
   { to: '/history', label: 'Bet History', icon: Table2 },
   { to: '/reports', label: 'Reports', icon: FileDown },
-  { to: '/settings', label: 'Data Source', icon: Settings },
+  ...(ADMIN_UI ? [{ to: '/settings', label: 'Data Source', icon: Settings }] : []),
 ];
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Trophy, TrendingDown, Award, Landmark, Flame, Snowflake, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { KpiGrid } from '@/components/dashboard/KpiGrid';
-import { ErrorBanner, WarningBanner } from '@/components/dashboard/StatusBanners';
+import { ErrorBanner } from '@/components/dashboard/StatusBanners';
 import { SectionCard, Segmented } from '@/components/ui/primitives';
 import { RankingTable } from '@/components/rankings/RankingTable';
 import { ProfitOverTimeChart } from '@/charts/ProfitOverTimeChart';
@@ -25,7 +25,6 @@ export function DashboardPage() {
   return (
     <div className="space-y-5">
       <ErrorBanner />
-      <WarningBanner />
 
       <KpiGrid kpis={a.kpis} loading={a.isLoading} />
 

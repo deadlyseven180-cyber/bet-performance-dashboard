@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { SectionCard, Segmented, Badge } from '@/components/ui/primitives';
-import { ErrorBanner, WarningBanner } from '@/components/dashboard/StatusBanners';
+import { ErrorBanner } from '@/components/dashboard/StatusBanners';
 import { ProfitOverTimeChart } from '@/charts/ProfitOverTimeChart';
 import { ProfitByGroupChart } from '@/charts/ProfitByGroupChart';
 import { WinRateByTypeChart } from '@/charts/WinRateByTypeChart';
@@ -16,7 +16,6 @@ export function ChartsPage() {
   return (
     <div className="space-y-5">
       <ErrorBanner />
-      <WarningBanner />
 
       <SectionCard
         title="Profit Over Time"

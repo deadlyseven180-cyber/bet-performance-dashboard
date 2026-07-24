@@ -1,7 +1,7 @@
 import { useData } from '@/context/DataContext';
 import { SectionCard } from '@/components/ui/primitives';
 import { BetHistoryTable } from '@/components/history/BetHistoryTable';
-import { ErrorBanner, WarningBanner } from '@/components/dashboard/StatusBanners';
+import { ErrorBanner } from '@/components/dashboard/StatusBanners';
 import { exportCsv } from '@/services/export';
 import { useToast } from '@/components/ui/Toast';
 import { Download } from 'lucide-react';
@@ -13,7 +13,6 @@ export function HistoryPage() {
   return (
     <div className="space-y-5">
       <ErrorBanner />
-      <WarningBanner />
       <SectionCard
         title="Bet History"
         subtitle={`${filteredBets.length} of ${bets.length} records • read-only • use the filter bar above to refine`}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { SectionCard, Segmented } from '@/components/ui/primitives';
 import { RankingTable } from '@/components/rankings/RankingTable';
-import { ErrorBanner, WarningBanner } from '@/components/dashboard/StatusBanners';
+import { ErrorBanner } from '@/components/dashboard/StatusBanners';
 import type { RankMetric } from '@/services/analytics';
 import { Trophy, TrendingDown, CreditCard, Building2, Volleyball, Ticket } from 'lucide-react';
 
@@ -13,7 +13,6 @@ export function RankingsPage() {
   return (
     <div className="space-y-5">
       <ErrorBanner />
-      <WarningBanner />
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500 dark:text-slate-400">Leaderboards across services, accounts, platforms, sports and bet types.</p>

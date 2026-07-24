@@ -3,6 +3,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { AuthGate } from '@/components/auth/AuthGate';
 import { DataProvider } from '@/context/DataContext';
 import { Layout } from '@/components/layout/Layout';
+import { ADMIN_UI } from '@/components/layout/Sidebar';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ChartsPage } from '@/pages/ChartsPage';
 import { RankingsPage } from '@/pages/RankingsPage';
@@ -23,7 +24,8 @@ export default function App() {
               <Route path="/rankings" element={<RankingsPage />} />
               <Route path="/history" element={<HistoryPage />} />
               <Route path="/reports" element={<ReportsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              {/* Owner-only admin screen — absent from the hosted build */}
+              {ADMIN_UI && <Route path="/settings" element={<SettingsPage />} />}
               <Route path="*" element={<DashboardPage />} />
             </Route>
             </Routes>
