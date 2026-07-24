@@ -1,5 +1,6 @@
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { GroupStat } from '@/services/analytics';
+import { withOther } from '@/services/analytics';
 import { useChartColors, profitFill } from './chartTheme';
 import { makeTooltip } from './ChartTooltip';
 import { money, moneyCompact } from '@/utils/format';
@@ -8,10 +9,14 @@ import { BarChart3 } from 'lucide-react';
 
 const TT = makeTooltip((v) => money(v));
 
-/** Horizontal ranked bar chart of profit by group (service, sport, platform…). */
+/**
+ * Horizontal ranked bar chart of profit by group (service, sport, platform…).
+ * Everything beyond the top N is rolled into a single "Other" bar so a long
+ * tail is represented rather than silently dropped.
+ */
 export function ProfitByGroupChart({ stats, limit = 10, height }: { stats: GroupStat[]; limit?: number; height?: number }) {
   const c = useChartColors();
-  const data = [...stats].sort((a, b) => b.profit - a.profit).slice(0, limit).reverse();
+  const data = withOther(stats, limit).reverse();
 
   if (!data.length) {
     return <EmptyState icon={<BarChart3 className="h-10 w-10" />} title="No data" message="No settled bets match the current filters." />;

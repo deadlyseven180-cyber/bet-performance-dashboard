@@ -12,7 +12,11 @@ import { LineChart as LineIcon } from 'lucide-react';
 
 const TT = makeTooltip((v, name) => (name === 'Cumulative' || name === 'Period Profit' ? money(v) : String(v)));
 
-export function ProfitOverTimeChart({ bets, granularity }: { bets: Bet[]; granularity: Granularity }) {
+export type ProfitMode = 'both' | 'cumulative' | 'period';
+
+export function ProfitOverTimeChart({ bets, granularity, mode = 'both', height = 360 }: {
+  bets: Bet[]; granularity: Granularity; mode?: ProfitMode; height?: number;
+}) {
   const c = useChartColors();
   const data = useMemo(() => profitOverTime(bets, granularity), [bets, granularity]);
 
@@ -21,7 +25,7 @@ export function ProfitOverTimeChart({ bets, granularity }: { bets: Bet[]; granul
   }
 
   return (
-    <ResponsiveContainer width="100%" height={320}>
+    <ResponsiveContainer width="100%" height={height}>
       <ComposedChart data={data} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="cumFill" x1="0" y1="0" x2="0" y2="1">
@@ -34,10 +38,14 @@ export function ProfitOverTimeChart({ bets, granularity }: { bets: Bet[]; granul
         <YAxis tickFormatter={moneyCompact} tick={{ fill: c.axis, fontSize: 11 }} tickLine={false} axisLine={false} width={54} />
         <Tooltip content={<TT />} cursor={{ fill: c.grid, opacity: 0.4 }} />
         <Legend wrapperStyle={{ fontSize: 12, color: c.text }} />
-        <Bar dataKey="profit" name="Period Profit" radius={[4, 4, 0, 0]} maxBarSize={38}>
-          {data.map((d, i) => <Cell key={i} fill={profitFill(d.profit)} fillOpacity={0.85} />)}
-        </Bar>
-        <Area type="monotone" dataKey="cumulative" name="Cumulative" stroke={BRAND} strokeWidth={2.5} fill="url(#cumFill)" />
+        {mode !== 'cumulative' && (
+          <Bar dataKey="profit" name="Period Profit" radius={[4, 4, 0, 0]} maxBarSize={38}>
+            {data.map((d, i) => <Cell key={i} fill={profitFill(d.profit)} fillOpacity={0.85} />)}
+          </Bar>
+        )}
+        {mode !== 'period' && (
+          <Area type="monotone" dataKey="cumulative" name="Cumulative" stroke={BRAND} strokeWidth={2.5} fill="url(#cumFill)" />
+        )}
       </ComposedChart>
     </ResponsiveContainer>
   );

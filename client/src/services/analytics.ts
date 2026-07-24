@@ -284,6 +284,90 @@ export function stakeDistribution(bets: Bet[]): { buckets: Bucket[]; avg: number
 }
 
 // ── Distinct value helpers (for filter option lists) ─────────────────────
+/**
+ * Which dimensions actually carry data in this spreadsheet. Sheets vary wildly
+ * — a column that is entirely blank should not produce an empty chart, filter
+ * or table column. The UI reads this so it adapts itself to the source data,
+ * and features reappear automatically if the column is populated later.
+ */
+export interface Dimensions {
+  service: boolean;
+  account: boolean;
+  betPlatform: boolean;
+  sport: boolean;
+  league: boolean;
+  betType: boolean;
+  event: boolean;
+  selection: boolean;
+  notes: boolean;
+}
+
+export function availableDimensions(bets: Bet[]): Dimensions {
+  const has = (f: keyof Bet): boolean => {
+    let seen: string | null = null;
+    for (const b of bets) {
+      const v = b[f];
+      if (v == null) continue;
+      const s = String(v).trim();
+      if (!s || s === 'Unknown') continue;
+      if (seen === null) seen = s;
+      else if (seen !== s) return true; // at least two distinct real values
+    }
+    return seen !== null; // a single real value still counts as present
+  };
+  return {
+    service: has('service'), account: has('account'), betPlatform: has('betPlatform'),
+    sport: has('sport'), league: has('league'), betType: has('betType'),
+    event: has('event'), selection: has('selection'), notes: has('notes'),
+  };
+}
+
+/**
+ * Data-entry cleanup: bookmaker names sometimes get typed into the Sport
+ * column. Rather than hardcoding a bookie list, we treat any sport value that
+ * also appears as a betting platform in this same dataset as mis-entered.
+ */
+export function cleanSportNoise(bets: Bet[]): Bet[] {
+  const platforms = new Set(
+    bets.map((b) => b.betPlatform.trim().toLowerCase()).filter((p) => p && p !== 'unknown'),
+  );
+  if (!platforms.size) return bets;
+  let changed = false;
+  const out = bets.map((b) => {
+    if (platforms.has(b.sport.trim().toLowerCase())) {
+      changed = true;
+      return { ...b, sport: 'Unknown' };
+    }
+    return b;
+  });
+  return changed ? out : bets;
+}
+
+/**
+ * Keep the top N groups and roll everything else into a single "Other" row, so
+ * a long tail (e.g. 125 accounts) doesn't silently hide half the data.
+ */
+export function withOther(stats: GroupStat[], topN: number): GroupStat[] {
+  const sorted = [...stats].sort((a, b) => b.profit - a.profit);
+  if (sorted.length <= topN) return sorted;
+  const head = sorted.slice(0, topN);
+  const tail = sorted.slice(topN);
+  const other = tail.reduce<GroupStat>((acc, g) => ({
+    key: `Other (${tail.length})`,
+    bets: acc.bets + g.bets,
+    settled: acc.settled + g.settled,
+    won: acc.won + g.won,
+    lost: acc.lost + g.lost,
+    stake: acc.stake + g.stake,
+    returns: acc.returns + g.returns,
+    profit: acc.profit + g.profit,
+    roi: 0, winRate: 0, avgOdds: 0,
+  }), { key: 'Other', bets: 0, settled: 0, won: 0, lost: 0, stake: 0, returns: 0, profit: 0, roi: 0, winRate: 0, avgOdds: 0 });
+  other.roi = other.stake > 0 ? (other.profit / other.stake) * 100 : 0;
+  other.winRate = other.won + other.lost > 0 ? (other.won / (other.won + other.lost)) * 100 : 0;
+  return [...head, other];
+}
+
 export function distinctValues(bets: Bet[], field: keyof Bet): string[] {
   const set = new Set<string>();
   for (const b of bets) {

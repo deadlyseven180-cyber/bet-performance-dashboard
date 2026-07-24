@@ -1,4 +1,4 @@
-import type { Bet, Filters } from '@/types';
+import { EMPTY_FILTERS, type Bet, type Filters } from '@/types';
 
 /** Apply the active filter set to a list of bets. All filters combine (AND). */
 export function applyFilters(bets: Bet[], f: Filters): Bet[] {
@@ -22,6 +22,45 @@ export function applyFilters(bets: Bet[], f: Filters): Bet[] {
     }
     return true;
   });
+}
+
+/**
+ * Filters <-> URL query string. Syncing to the URL makes any view shareable:
+ * you can send someone a link to "June, NBA, Sharp Alerts" instead of telling
+ * them which controls to set.
+ */
+const LIST_KEYS: [keyof Filters, string][] = [
+  ['services', 'svc'], ['accounts', 'acc'], ['platforms', 'plat'],
+  ['sports', 'sport'], ['leagues', 'league'], ['betTypes', 'type'],
+  ['statuses', 'status'],
+];
+
+export function filtersToParams(f: Filters): Record<string, string> {
+  const p: Record<string, string> = {};
+  if (f.dateFrom) p.from = f.dateFrom;
+  if (f.dateTo) p.to = f.dateTo;
+  if (f.search.trim()) p.q = f.search.trim();
+  for (const [key, param] of LIST_KEYS) {
+    const v = f[key] as string[];
+    if (v.length) p[param] = v.join('~');
+  }
+  return p;
+}
+
+/** Returns null when the URL carries no filter state at all. */
+export function filtersFromParams(p: URLSearchParams): Filters | null {
+  const known = ['from', 'to', 'q', ...LIST_KEYS.map(([, k]) => k)];
+  if (!known.some((k) => p.has(k))) return null;
+
+  const f: Filters = { ...EMPTY_FILTERS };
+  f.dateFrom = p.get('from');
+  f.dateTo = p.get('to');
+  f.search = p.get('q') ?? '';
+  for (const [key, param] of LIST_KEYS) {
+    const raw = p.get(param);
+    if (raw) (f[key] as string[]) = raw.split('~').filter(Boolean);
+  }
+  return f;
 }
 
 export function countActiveFilters(f: Filters): number {

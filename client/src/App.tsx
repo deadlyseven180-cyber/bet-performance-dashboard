@@ -15,9 +15,10 @@ export default function App() {
   return (
     <ToastProvider>
       <AuthGate>
-        <DataProvider>
-          <BrowserRouter>
-          <Routes>
+        {/* Router wraps the data layer so filters can sync to the URL */}
+        <BrowserRouter>
+          <DataProvider>
+            <Routes>
             <Route element={<Layout />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/charts" element={<ChartsPage />} />
@@ -29,8 +30,8 @@ export default function App() {
               <Route path="*" element={<DashboardPage />} />
             </Route>
             </Routes>
-          </BrowserRouter>
-        </DataProvider>
+          </DataProvider>
+        </BrowserRouter>
       </AuthGate>
     </ToastProvider>
   );

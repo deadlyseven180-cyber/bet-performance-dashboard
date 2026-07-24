@@ -1,33 +1,47 @@
 import { useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Inbox, Sparkles } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Inbox, Sparkles } from 'lucide-react';
 import type { Bet } from '@/types';
+import type { Dimensions } from '@/services/analytics';
 import { formatDate, money, decimalOdds, STATUS_LABEL, STATUS_STYLE, profitColor } from '@/utils/format';
 import { EmptyState } from '@/components/ui/primitives';
 
-type SortKey = 'date' | 'service' | 'account' | 'betPlatform' | 'sport' | 'event' | 'selection' | 'stake' | 'odds' | 'status' | 'profit';
+type SortKey = 'date' | 'service' | 'account' | 'betPlatform' | 'sport' | 'league' | 'event' | 'selection' | 'stake' | 'odds' | 'status' | 'profit';
 type Dir = 'asc' | 'desc';
 
-const COLS: { key: SortKey; label: string; numeric?: boolean; align?: string }[] = [
+interface Col {
+  key: SortKey;
+  label: string;
+  align?: string;
+  /** Which data dimension must be present for this column to be shown. */
+  dim?: keyof Dimensions;
+}
+
+const COLS: Col[] = [
   { key: 'date', label: 'Date' },
-  { key: 'service', label: 'Service' },
-  { key: 'account', label: 'Account' },
-  { key: 'betPlatform', label: 'Platform' },
-  { key: 'sport', label: 'Sport' },
-  { key: 'event', label: 'Event' },
-  { key: 'selection', label: 'Selection' },
-  { key: 'stake', label: 'Stake', numeric: true, align: 'text-right' },
-  { key: 'odds', label: 'Odds', numeric: true, align: 'text-right' },
+  { key: 'service', label: 'Service', dim: 'service' },
+  { key: 'account', label: 'Account', dim: 'account' },
+  { key: 'betPlatform', label: 'Platform', dim: 'betPlatform' },
+  { key: 'sport', label: 'Sport', dim: 'sport' },
+  { key: 'league', label: 'League', dim: 'league' },
+  { key: 'event', label: 'Event', dim: 'event' },
+  { key: 'selection', label: 'Selection', dim: 'selection' },
+  { key: 'stake', label: 'Stake', align: 'text-right' },
+  { key: 'odds', label: 'Odds', align: 'text-right' },
   { key: 'status', label: 'Status' },
-  { key: 'profit', label: 'Profit', numeric: true, align: 'text-right' },
+  { key: 'profit', label: 'Profit', align: 'text-right' },
 ];
 
-const PAGE_SIZE = 25;
+const PAGE_SIZES = [25, 50, 100];
 
-export function BetHistoryTable({ bets }: { bets: Bet[] }) {
+export function BetHistoryTable({ bets, dims }: { bets: Bet[]; dims: Dimensions }) {
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [dir, setDir] = useState<Dir>('desc');
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
+
+  // Only render columns whose underlying data actually exists in this sheet.
+  const cols = useMemo(() => COLS.filter((c) => !c.dim || dims[c.dim]), [dims]);
 
   const sorted = useMemo(() => {
     const copy = [...bets];
@@ -42,9 +56,9 @@ export function BetHistoryTable({ bets }: { bets: Bet[] }) {
     return copy;
   }, [bets, sortKey, dir]);
 
-  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const current = Math.min(page, pageCount - 1);
-  const rows = sorted.slice(current * PAGE_SIZE, current * PAGE_SIZE + PAGE_SIZE);
+  const rows = sorted.slice(current * pageSize, current * pageSize + pageSize);
 
   const toggleSort = (key: SortKey) => {
     if (key === sortKey) setDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -56,13 +70,38 @@ export function BetHistoryTable({ bets }: { bets: Bet[] }) {
     return <EmptyState icon={<Inbox className="h-10 w-10" />} title="No bets found" message="No records match your current filters or search." />;
   }
 
+  const cell = (b: Bet, key: SortKey) => {
+    switch (key) {
+      case 'date': return <span className="whitespace-nowrap text-slate-500 dark:text-slate-400">{formatDate(b.date)}</span>;
+      case 'service': return <span className="font-medium text-slate-700 dark:text-slate-200">{b.service}</span>;
+      case 'stake': return <span className="tabular-nums text-slate-600 dark:text-slate-300">{money(b.stake)}</span>;
+      case 'odds': return <span className="tabular-nums text-slate-600 dark:text-slate-300">{decimalOdds(b.odds)}</span>;
+      case 'status': return (
+        <span className={clsx('chip', STATUS_STYLE[b.status])}>
+          {STATUS_LABEL[b.status]}
+          {b.statusInferred && <Sparkles className="h-3 w-3" aria-label="Inferred from profit/return" />}
+        </span>
+      );
+      case 'profit': return (
+        <span className={clsx('tabular-nums font-semibold', profitColor(b.profit))}>
+          {b.status === 'pending' ? '—' : `${b.profit > 0 ? '+' : ''}${money(b.profit)}`}
+        </span>
+      );
+      default: {
+        const v = String(b[key] ?? '');
+        return <span className="text-slate-600 dark:text-slate-300" title={v}>{v || '—'}</span>;
+      }
+    }
+  };
+
   return (
     <div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px] text-sm">
-          <thead>
+      <div className="max-h-[70vh] overflow-auto rounded-xl border border-slate-100 dark:border-slate-800">
+        <table className="w-full min-w-[820px] text-sm">
+          {/* Sticky header so column meaning survives long scrolls */}
+          <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur dark:bg-slate-900/95">
             <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
-              {COLS.map((col) => {
+              {cols.map((col) => {
                 const activeSort = sortKey === col.key;
                 const Icon = activeSort ? (dir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
                 return (
@@ -80,44 +119,56 @@ export function BetHistoryTable({ bets }: { bets: Bet[] }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((b) => (
-              <tr key={b.id} className="border-b border-slate-50 hover:bg-slate-50/60 dark:border-slate-800/60 dark:hover:bg-slate-800/40">
-                <td className="whitespace-nowrap px-3 py-2.5 text-slate-500 dark:text-slate-400">{formatDate(b.date)}</td>
-                <td className="px-3 py-2.5 font-medium text-slate-700 dark:text-slate-200">{b.service}</td>
-                <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400">{b.account}</td>
-                <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400">{b.betPlatform}</td>
-                <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400">{b.sport}</td>
-                <td className="max-w-[180px] truncate px-3 py-2.5 text-slate-600 dark:text-slate-300" title={b.event}>{b.event || '—'}</td>
-                <td className="max-w-[160px] truncate px-3 py-2.5 text-slate-600 dark:text-slate-300" title={b.selection}>{b.selection || '—'}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{money(b.stake)}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{decimalOdds(b.odds)}</td>
-                <td className="px-3 py-2.5">
-                  <span className={clsx('chip', STATUS_STYLE[b.status])}>
-                    {STATUS_LABEL[b.status]}
-                    {b.statusInferred && <Sparkles className="h-3 w-3" aria-label="Inferred from profit/return" />}
-                  </span>
-                </td>
-                <td className={clsx('px-3 py-2.5 text-right tabular-nums font-semibold', profitColor(b.profit))}>
-                  {b.status === 'pending' ? '—' : money(b.profit)}
-                </td>
+            {rows.map((b, i) => (
+              <tr
+                key={b.id}
+                className={clsx(
+                  'border-b border-slate-50 hover:bg-brand-50/40 dark:border-slate-800/60 dark:hover:bg-slate-800/50',
+                  i % 2 === 1 && 'bg-slate-50/50 dark:bg-slate-800/20',
+                )}
+              >
+                {cols.map((col) => (
+                  <td key={col.key} className={clsx('max-w-[200px] truncate px-3 py-2.5', col.align)}>
+                    {cell(b, col.key)}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-1 pt-3 dark:border-slate-800">
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          Showing <span className="font-semibold">{current * PAGE_SIZE + 1}–{Math.min((current + 1) * PAGE_SIZE, sorted.length)}</span> of{' '}
-          <span className="font-semibold">{sorted.length}</span> bets
-        </p>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            <span className="font-semibold">{current * pageSize + 1}–{Math.min((current + 1) * pageSize, sorted.length)}</span>
+            {' of '}<span className="font-semibold">{sorted.length.toLocaleString()}</span>
+          </p>
+          <select
+            value={pageSize}
+            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
+            className="input w-auto py-1 text-xs"
+            title="Rows per page"
+          >
+            {PAGE_SIZES.map((s) => <option key={s} value={s}>{s} / page</option>)}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => setPage(0)} disabled={current === 0} className="btn-ghost px-2 py-1.5" title="First page">
+            <ChevronsLeft className="h-4 w-4" />
+          </button>
           <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={current === 0} className="btn-ghost px-2 py-1.5">
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">Page {current + 1} / {pageCount}</span>
+          <span className="px-1 text-xs tabular-nums text-slate-500 dark:text-slate-400">
+            Page {current + 1} / {pageCount.toLocaleString()}
+          </span>
           <button onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))} disabled={current >= pageCount - 1} className="btn-ghost px-2 py-1.5">
             <ChevronRight className="h-4 w-4" />
+          </button>
+          <button onClick={() => setPage(pageCount - 1)} disabled={current >= pageCount - 1} className="btn-ghost px-2 py-1.5" title="Last page">
+            <ChevronsRight className="h-4 w-4" />
           </button>
         </div>
       </div>

@@ -43,8 +43,13 @@ export function RankingTable({
               <td className="max-w-[160px] truncate py-2 pr-2 font-medium text-slate-700 dark:text-slate-200">{g.key}</td>
               {!compact && <td className="py-2 pr-2 text-right tabular-nums text-slate-500">{fmtNum(g.bets)}</td>}
               {!compact && <td className="py-2 pr-2 text-right tabular-nums text-slate-500">{percent(g.winRate)}</td>}
-              <td className={clsx('py-2 pr-2 text-right tabular-nums font-medium', profitColor(g.roi))}>{percent(g.roi)}</td>
-              <td className={clsx('py-2 pr-1 text-right tabular-nums font-semibold', profitColor(g.profit))}>{money(g.profit)}</td>
+              {/* +/- prefix so profit vs loss reads without relying on colour */}
+              <td className={clsx('py-2 pr-2 text-right tabular-nums font-medium', profitColor(g.roi))}>
+                {g.roi > 0 ? '+' : ''}{percent(g.roi)}
+              </td>
+              <td className={clsx('py-2 pr-1 text-right tabular-nums font-semibold', profitColor(g.profit))}>
+                {g.profit > 0 ? '+' : ''}{money(g.profit)}
+              </td>
             </tr>
           ))}
         </tbody>

@@ -4,7 +4,9 @@ import {
 } from 'react';
 import { sheetsApi } from '@/api/sheets';
 import { ApiError } from '@/api/client';
-import { applyFilters } from '@/services/filters';
+import { useSearchParams } from 'react-router-dom';
+import { applyFilters, filtersToParams, filtersFromParams } from '@/services/filters';
+import { cleanSportNoise } from '@/services/analytics';
 import { EMPTY_FILTERS, defaultFilters, type AppConfig, type Bet, type BetsPayload, type Filters, type SyncStatus } from '@/types';
 import { useToast } from '@/components/ui/Toast';
 
@@ -47,8 +49,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
 
-  // Default view = the present month.
-  const [filters, setFilters] = useState<Filters>(defaultFilters);
+  // Filters come from the URL when present (shareable views), else default to
+  // the present month.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [filters, setFilters] = useState<Filters>(
+    () => filtersFromParams(searchParams) ?? defaultFilters(),
+  );
+
+  // Mirror filter state back into the URL so the view can be copied/shared.
+  useEffect(() => {
+    setSearchParams(filtersToParams(filters), { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
   const [spreadsheetId, setSpreadsheetId] = useState<string>(() => localStorage.getItem('spreadsheetId') ?? '');
   const [worksheet, setWorksheet] = useState<string>(() => localStorage.getItem('worksheet') ?? '');
   const [autoRefresh, setAutoRefresh] = useState<boolean>(() => localStorage.getItem('autoRefresh') === '1');
@@ -62,7 +74,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     try {
       const data = await sheetsApi.getBets(spreadsheetId || undefined, worksheet || undefined);
       setPayload(data);
-      setBets(data.bets);
+      setBets(cleanSportNoise(data.bets));
       setSyncedAt(data.syncedAt);
       setWarnings(data.warnings ?? []);
       setSyncStatus('success');

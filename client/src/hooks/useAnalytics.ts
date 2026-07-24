@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useData } from '@/context/DataContext';
-import { computeKpis, groupBy, oddsDistribution, stakeDistribution } from '@/services/analytics';
+import {
+  availableDimensions, computeKpis, groupBy, oddsDistribution, stakeDistribution,
+} from '@/services/analytics';
 
 /** Derives every analytic the UI needs from the currently-filtered bets. */
 export function useAnalytics() {
@@ -10,6 +12,8 @@ export function useAnalytics() {
     bets: filteredBets,
     allBets: bets,
     isLoading: syncStatus === 'loading' && bets.length === 0,
+    /** Which columns actually have data — drives what the UI renders. */
+    dims: availableDimensions(bets),
     kpis: computeKpis(filteredBets),
     byService: groupBy(filteredBets, 'service'),
     byAccount: groupBy(filteredBets, 'account'),

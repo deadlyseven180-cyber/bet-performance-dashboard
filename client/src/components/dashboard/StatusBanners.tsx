@@ -31,15 +31,3 @@ export function ErrorBanner() {
   );
 }
 
-export function WarningBanner() {
-  const { warnings, syncStatus } = useData();
-  if (syncStatus === 'error' || !warnings.length) return null;
-  return (
-    <div className="card mb-4 flex items-start gap-3 border-amber-200 bg-amber-50 p-3.5 dark:border-amber-500/30 dark:bg-amber-500/10">
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-      <ul className="space-y-0.5 text-xs text-amber-700 dark:text-amber-300">
-        {warnings.map((w, i) => <li key={i}>{w}</li>)}
-      </ul>
-    </div>
-  );
-}
