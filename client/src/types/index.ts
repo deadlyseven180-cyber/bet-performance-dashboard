@@ -35,6 +35,8 @@ export interface BetsPayload {
   source: string;
   syncedAt: string;
   recordCount: number;
+  hash: string;
+  cached?: boolean;
   warnings: string[];
 }
 

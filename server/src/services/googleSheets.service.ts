@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { google, sheets_v4 } from 'googleapis';
 import { config, isConfigured, GOOGLE_SCOPES } from '../config.js';
 import { getAuthedOAuthClient } from './auth.service.js';
@@ -72,6 +73,19 @@ function translateGoogleError(err: any): SheetsError {
   return new SheetsError(err?.message || 'Failed to read from Google Sheets.', 502, 'UPSTREAM_ERROR');
 }
 
+/**
+ * Short-lived response cache. The client polls every ~10s for near-realtime
+ * updates; caching for a few seconds keeps those polls fast and stays well
+ * within Google's per-user read quota if several viewers poll at once.
+ */
+const CACHE_TTL_MS = 6000;
+const responseCache = new Map<string, { at: number; payload: BetsPayload }>();
+
+/** Stable fingerprint of the raw cell grid — changes iff the sheet changes. */
+function hashRows(rows: string[][]): string {
+  return crypto.createHash('sha1').update(JSON.stringify(rows)).digest('hex');
+}
+
 /** Fetch spreadsheet metadata (title + list of worksheet tabs). */
 export async function fetchMeta(spreadsheetId: string): Promise<Omit<SheetMeta, 'worksheet'>> {
   if (config.dataSource === 'mock') {
@@ -94,6 +108,7 @@ export async function fetchMeta(spreadsheetId: string): Promise<Omit<SheetMeta, 
 export async function fetchBets(opts: {
   spreadsheetId?: string;
   worksheet?: string;
+  force?: boolean;
 }): Promise<BetsPayload> {
   const worksheet = opts.worksheet || config.defaultWorksheet;
   const syncedAt = new Date().toISOString();
@@ -102,13 +117,20 @@ export async function fetchBets(opts: {
     const { bets, warnings } = normalizeRows(mockRows);
     return {
       bets, warnings, source: 'mock', syncedAt, recordCount: bets.length,
-      meta: { ...mockMeta, worksheet },
+      hash: hashRows(mockRows), meta: { ...mockMeta, worksheet },
     };
   }
 
   const spreadsheetId = opts.spreadsheetId || config.defaultSpreadsheetId;
   if (!spreadsheetId)
     throw new SheetsError('No spreadsheet selected. Provide a spreadsheet ID.', 400, 'NO_SPREADSHEET');
+
+  // Serve from cache when a very recent read exists (unless forced).
+  const cacheKey = `${spreadsheetId}|${worksheet}`;
+  const hit = responseCache.get(cacheKey);
+  if (!opts.force && hit && Date.now() - hit.at < CACHE_TTL_MS) {
+    return { ...hit.payload, cached: true };
+  }
 
   try {
     const sheets = await getSheetsClient();
@@ -137,14 +159,17 @@ export async function fetchBets(opts: {
     const rows = (res.data.values ?? []).map((r) => (r as unknown[]).map((c) => (c == null ? '' : String(c))));
     const { bets, warnings: rowWarnings } = normalizeRows(rows);
 
-    return {
+    const payload: BetsPayload = {
       bets,
       warnings: [...warnings, ...rowWarnings],
       source: config.dataSource,
       syncedAt,
       recordCount: bets.length,
+      hash: hashRows(rows),
       meta: { ...metaInfo, worksheet: resolved },
     };
+    responseCache.set(cacheKey, { at: Date.now(), payload });
+    return payload;
   } catch (err) {
     if (err instanceof SheetsError) throw err;
     throw translateGoogleError(err);

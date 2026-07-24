@@ -3,12 +3,10 @@ import { Database, Link2, RefreshCw, Clock, CheckCircle2, FileSpreadsheet, Exter
 import { useData } from '@/context/DataContext';
 import { sheetsApi, type AuthStatus } from '@/api/sheets';
 import { SectionCard, Badge } from '@/components/ui/primitives';
-import { useToast } from '@/components/ui/Toast';
 import { money } from '@/utils/format';
 
 export function SettingsPage() {
-  const { config, payload, spreadsheetId, worksheet, setSource, refresh, autoRefresh, setAutoRefresh, syncedAt, recordCount } = useData();
-  const toast = useToast();
+  const { config, payload, spreadsheetId, worksheet, setSource, refresh, syncedAt, recordCount } = useData();
   const [sid, setSid] = useState(spreadsheetId);
   const [ws, setWs] = useState(worksheet);
   const [auth, setAuth] = useState<AuthStatus | null>(null);
@@ -102,22 +100,18 @@ export function SettingsPage() {
           <InfoTile icon={Database} label="Records Loaded" value={String(recordCount)} />
         </div>
 
-        <label className="mt-5 flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+        <div className="mt-5 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+          </span>
           <div>
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Automatic refresh</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Re-read the sheet every 60 seconds in the background.</p>
+            <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Live — auto-syncing</p>
+            <p className="text-xs text-emerald-600/80 dark:text-emerald-300/70">The sheet is re-read every 10 seconds automatically; changes appear on their own.</p>
           </div>
-          <button
-            role="switch"
-            aria-checked={autoRefresh}
-            onClick={() => { setAutoRefresh(!autoRefresh); toast.info(autoRefresh ? 'Auto-refresh off' : 'Auto-refresh on'); }}
-            className={`relative h-6 w-11 rounded-full transition-colors ${autoRefresh ? 'bg-brand-600' : 'bg-slate-300 dark:bg-slate-700'}`}
-          >
-            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${autoRefresh ? 'translate-x-5' : 'translate-x-0.5'}`} />
-          </button>
-        </label>
+        </div>
 
-        <button onClick={() => refresh()} className="btn-ghost mt-4"><RefreshCw className="h-4 w-4" /> Refresh now</button>
+        <button onClick={() => refresh()} className="btn-ghost mt-4"><RefreshCw className="h-4 w-4" /> Sync now</button>
       </SectionCard>
 
       {payload && payload.bets.length > 0 && (

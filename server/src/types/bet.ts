@@ -40,6 +40,10 @@ export interface BetsPayload {
   source: string;
   syncedAt: string;
   recordCount: number;
+  /** Content fingerprint — lets the client skip re-render when unchanged. */
+  hash: string;
+  /** True when this response was served from the short-lived server cache. */
+  cached?: boolean;
   /** Non-fatal warnings, e.g. missing optional columns. */
   warnings: string[];
 }

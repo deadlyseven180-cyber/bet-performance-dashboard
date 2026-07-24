@@ -5,6 +5,7 @@ import { DataProvider } from '@/context/DataContext';
 import { Layout } from '@/components/layout/Layout';
 import { ADMIN_UI } from '@/components/layout/Sidebar';
 import { DashboardPage } from '@/pages/DashboardPage';
+import { TrackerPage } from '@/pages/TrackerPage';
 import { ChartsPage } from '@/pages/ChartsPage';
 import { RankingsPage } from '@/pages/RankingsPage';
 import { HistoryPage } from '@/pages/HistoryPage';
@@ -21,6 +22,7 @@ export default function App() {
             <Routes>
             <Route element={<Layout />}>
               <Route path="/" element={<DashboardPage />} />
+              <Route path="/tracker" element={<TrackerPage />} />
               <Route path="/charts" element={<ChartsPage />} />
               <Route path="/rankings" element={<RankingsPage />} />
               <Route path="/history" element={<HistoryPage />} />

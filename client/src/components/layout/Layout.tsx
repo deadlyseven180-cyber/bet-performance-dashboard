@@ -6,6 +6,7 @@ import { GlobalFilterBar } from '@/components/filters/GlobalFilterBar';
 
 const TITLES: Record<string, string> = {
   '/': 'Dashboard',
+  '/tracker': 'Bet Tracker',
   '/charts': 'Charts & Analytics',
   '/rankings': 'Rankings',
   '/history': 'Bet History',

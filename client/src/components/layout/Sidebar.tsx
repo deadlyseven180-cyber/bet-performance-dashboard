@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
-import { LayoutDashboard, LineChart, Trophy, Table2, FileDown, Settings, X } from 'lucide-react';
+import { LayoutDashboard, LineChart, Trophy, Table2, FileDown, Settings, Crosshair, X } from 'lucide-react';
 import { useData } from '@/context/DataContext';
 
 /**
@@ -12,6 +12,7 @@ export const ADMIN_UI = import.meta.env.DEV;
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/tracker', label: 'Bet Tracker', icon: Crosshair },
   { to: '/charts', label: 'Charts', icon: LineChart },
   { to: '/rankings', label: 'Rankings', icon: Trophy },
   { to: '/history', label: 'Bet History', icon: Table2 },
