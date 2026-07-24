@@ -122,48 +122,49 @@ const SEGMENTS = [
   { key: 'pending', label: 'Pending', cls: 'bg-amber-400', text: 'text-amber-600 dark:text-amber-400' },
 ] as const;
 
+/**
+ * Settlement split as four equal stat tiles: colour accent, count as the
+ * headline, and share of total beneath — consistent with the KPI cards
+ * elsewhere, and each number unambiguously tied to its own label.
+ */
 function SettlementCard({ kpis, loading }: { kpis: Kpis; loading?: boolean }) {
   const counts = { won: kpis.won, lost: kpis.lost, void: kpis.void, pending: kpis.pending };
   const total = counts.won + counts.lost + counts.void + counts.pending || 1;
 
   return (
     <div className="card p-4">
-      <div className="mb-2.5 flex items-baseline justify-between">
+      <div className="mb-3 flex items-baseline justify-between">
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Settlement</p>
         <p className="text-xs text-slate-400">{fmtNum(kpis.totalBets)} bets</p>
       </div>
 
-      {loading ? (
-        <Skeleton className="h-2.5 w-full" />
-      ) : (
-        <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-          {SEGMENTS.map((s) => {
-            const pct = (counts[s.key] / total) * 100;
-            if (pct <= 0) return null;
-            return (
-              <div
-                key={s.key}
-                className={s.cls}
-                style={{ width: `${pct}%` }}
-                title={`${s.label}: ${counts[s.key]} (${pct.toFixed(1)}%)`}
-              />
-            );
-          })}
-        </div>
-      )}
-
-      {/* Value sits immediately after its own label, so it can't read as
-          belonging to the next legend item. */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
-        {SEGMENTS.map((s) => (
-          <div key={s.key} className="flex items-baseline gap-1.5">
-            <span className={clsx('h-2 w-2 shrink-0 translate-y-[-1px] rounded-full', s.cls)} />
-            <span className="text-xs text-slate-500 dark:text-slate-400">{s.label}</span>
-            <span className={clsx('text-sm font-semibold tabular-nums', s.text)}>
-              {loading ? '—' : fmtNum(counts[s.key])}
-            </span>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {SEGMENTS.map((s) => {
+          const count = counts[s.key];
+          const pct = (count / total) * 100;
+          return (
+            <div
+              key={s.key}
+              className="relative overflow-hidden rounded-xl border border-slate-100 py-3 pl-4 pr-3 dark:border-slate-800"
+            >
+              {/* Colour accent doubles as the status key */}
+              <span className={clsx('absolute inset-y-0 left-0 w-1', s.cls)} aria-hidden />
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                {s.label}
+              </p>
+              {loading ? (
+                <Skeleton className="mt-1.5 h-6 w-14" />
+              ) : (
+                <>
+                  <p className={clsx('mt-0.5 text-xl font-bold tabular-nums', s.text)}>{fmtNum(count)}</p>
+                  <p className="text-[11px] tabular-nums text-slate-400 dark:text-slate-500">
+                    {pct.toFixed(1)}%
+                  </p>
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
