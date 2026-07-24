@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, X, Target, CalendarDays } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, Plus, X, Target, CalendarDays, Share2, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import { useData } from '@/context/DataContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useToast } from '@/components/ui/Toast';
 import { groupDuplicateBets, betGroupKey, distinctValues, type BetGroup } from '@/services/analytics';
+import { captureToBlob, shareImage } from '@/services/captureShare';
 import { SectionCard } from '@/components/ui/primitives';
 import { ErrorBanner } from '@/components/dashboard/StatusBanners';
 import { money, moneyKpi, formatDate, decimalOdds, STATUS_LABEL, STATUS_STYLE, profitColor } from '@/utils/format';
@@ -20,11 +22,14 @@ const DEFAULT_UNIT_SIZE = 1000;
  * placed across all accounts. Everything recalculates live as units change.
  */
 export function TrackerPage() {
-  const { bets } = useData();
+  const { bets, payload } = useData();
+  const toast = useToast();
   const [services, setServices] = useLocalStorage<string[]>('tracker.services', DEFAULT_SERVICES);
   const [unitSizes, setUnitSizes] = useLocalStorage<Record<string, number>>('tracker.targets', DEFAULT_UNIT_SIZES);
   const [betUnits, setBetUnits] = useLocalStorage<Record<string, number>>('tracker.betUnits', {});
   const [editing, setEditing] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const captureRef = useRef<HTMLDivElement>(null);
 
   const days = useMemo(() => {
     const set = new Set<string>();
@@ -41,6 +46,27 @@ export function TrackerPage() {
 
   const allServices = useMemo(() => distinctValues(bets, 'service'), [bets]);
   const addable = allServices.filter((s) => !services.includes(s));
+
+  const shareSnapshot = async () => {
+    if (!captureRef.current || sharing) return;
+    setSharing(true);
+    try {
+      const dark = document.documentElement.classList.contains('dark');
+      const bg = dark ? '#0f141a' : '#f6f7f8';
+      const blob = await captureToBlob(captureRef.current, bg);
+      const fname = `bets-${day ?? 'day'}.png`;
+      const result = await shareImage(blob, fname, `Bet tracker — ${day ? formatDate(day) : ''}`);
+      toast.success(
+        result === 'shared' ? 'Ready to share' : result === 'copied' ? 'Copied to clipboard' : 'Image downloaded',
+        result === 'copied' ? 'Paste it straight into your group chat.'
+          : result === 'downloaded' ? 'Saved as PNG — attach it in your chat.' : 'Pick your group chat to send it.',
+      );
+    } catch {
+      toast.error('Screenshot failed', 'Could not generate the image.');
+    } finally {
+      setSharing(false);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -64,9 +90,14 @@ export function TrackerPage() {
           </button>
         </div>
 
-        <button onClick={() => setEditing((e) => !e)} className={clsx('btn-ghost', editing && 'border-brand-300 text-brand-700 dark:text-brand-300')}>
-          <Target className="h-4 w-4" /> Services & unit size
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={shareSnapshot} disabled={sharing || !day} className="btn-primary" title="Screenshot the day's bets to share">
+            {sharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />} Share
+          </button>
+          <button onClick={() => setEditing((e) => !e)} className={clsx('btn-ghost', editing && 'border-brand-300 text-brand-700 dark:text-brand-300')}>
+            <Target className="h-4 w-4" /> Services & unit size
+          </button>
+        </div>
       </div>
 
       {editing && (
@@ -108,17 +139,58 @@ export function TrackerPage() {
         <SectionCard><p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No bets found for the tracked services yet.</p></SectionCard>
       )}
 
-      {day && services.map((svc) => (
-        <ServiceDay
-          key={svc}
-          service={svc}
-          day={day}
-          bets={bets}
-          unitSize={unitSizeFor(svc)}
-          betUnits={betUnits}
-          setUnits={setUnits}
-        />
-      ))}
+      {/* Everything inside this ref is what gets captured for the screenshot */}
+      {day && (
+        <div ref={captureRef} className="space-y-5 rounded bg-slate-100 dark:bg-slate-950">
+          <div className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
+            <div>
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{payload?.meta.spreadsheetTitle ?? 'Bet Tracker'}</p>
+              <p className="label-micro">Bet tracker · {formatDate(day)}</p>
+            </div>
+            <div className="text-right">
+              <DayTotal services={services} day={day} bets={bets} unitSizes={unitSizes} betUnits={betUnits} defaultUnitSize={DEFAULT_UNIT_SIZE} />
+            </div>
+          </div>
+
+          {services.map((svc) => (
+            <ServiceDay
+              key={svc}
+              service={svc}
+              day={day}
+              bets={bets}
+              unitSize={unitSizeFor(svc)}
+              betUnits={betUnits}
+              setUnits={setUnits}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Grand total across all tracked services for the header / screenshot. */
+function DayTotal({ services, day, bets, unitSizes, betUnits, defaultUnitSize }: {
+  services: string[]; day: string; bets: import('@/types').Bet[];
+  unitSizes: Record<string, number>; betUnits: Record<string, number>; defaultUnitSize: number;
+}) {
+  const { placed, missing } = useMemo(() => {
+    let placed = 0, missing = 0;
+    for (const svc of services) {
+      const unit = unitSizes[svc] ?? defaultUnitSize;
+      const groups = groupDuplicateBets(bets.filter((b) => b.service === svc && b.date === day));
+      for (const g of groups) {
+        placed += g.stake;
+        missing += Math.max(0, unit * (betUnits[betGroupKey(g)] ?? 1) - g.stake);
+      }
+    }
+    return { placed, missing };
+  }, [services, day, bets, unitSizes, betUnits, defaultUnitSize]);
+
+  return (
+    <div className="flex items-center gap-4">
+      <div><p className="label-micro">Placed</p><p className="text-sm font-bold tabular-nums text-slate-800 dark:text-slate-100">{moneyKpi(placed)}</p></div>
+      <div><p className="label-micro">Missing</p><p className={clsx('text-sm font-bold tabular-nums', missing > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400')}>{moneyKpi(missing)}</p></div>
     </div>
   );
 }
