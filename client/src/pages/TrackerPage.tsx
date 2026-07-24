@@ -10,6 +10,14 @@ import { SectionCard } from '@/components/ui/primitives';
 import { ErrorBanner } from '@/components/dashboard/StatusBanners';
 import { money, moneyKpi, formatDate, decimalOdds, STATUS_LABEL, STATUS_STYLE, profitColor } from '@/utils/format';
 
+interface ManualBet {
+  id: string;
+  day: string;
+  service: string;
+  name: string;
+  units: number;
+}
+
 const DEFAULT_SERVICES = ['60% Dude', 'SAIYAN', 'Lyno'];
 /** Value of one full unit (1u) per service. */
 const DEFAULT_UNIT_SIZES: Record<string, number> = { '60% Dude': 3000, SAIYAN: 1500, Lyno: 2000 };
@@ -27,6 +35,9 @@ export function TrackerPage() {
   const [services, setServices] = useLocalStorage<string[]>('tracker.services', DEFAULT_SERVICES);
   const [unitSizes, setUnitSizes] = useLocalStorage<Record<string, number>>('tracker.targets', DEFAULT_UNIT_SIZES);
   const [betUnits, setBetUnits] = useLocalStorage<Record<string, number>>('tracker.betUnits', {});
+  // Bets that were meant to be placed but never made it into the sheet — added
+  // by hand so they still count toward the day's "missing".
+  const [manualBets, setManualBets] = useLocalStorage<ManualBet[]>('tracker.manual', []);
   const [editing, setEditing] = useState(false);
   const [sharing, setSharing] = useState(false);
   const captureRef = useRef<HTMLDivElement>(null);
@@ -43,6 +54,13 @@ export function TrackerPage() {
   const unitSizeFor = (svc: string) => (unitSizes[svc] ?? DEFAULT_UNIT_SIZE);
   const setUnits = (key: string, units: number) =>
     setBetUnits((m) => ({ ...m, [key]: units }));
+
+  const addManual = (svc: string, name: string, units: number) => {
+    if (!day || !name.trim()) return;
+    const id = `${day}|${svc}|${name}|${Math.round(Math.random() * 1e9)}`;
+    setManualBets((list) => [...list, { id, day, service: svc, name: name.trim(), units }]);
+  };
+  const removeManual = (id: string) => setManualBets((list) => list.filter((m) => m.id !== id));
 
   const allServices = useMemo(() => distinctValues(bets, 'service'), [bets]);
   const addable = allServices.filter((s) => !services.includes(s));
@@ -61,8 +79,9 @@ export function TrackerPage() {
         result === 'copied' ? 'Paste it straight into your group chat.'
           : result === 'downloaded' ? 'Saved as PNG — attach it in your chat.' : 'Pick your group chat to send it.',
       );
-    } catch {
-      toast.error('Screenshot failed', 'Could not generate the image.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not generate the image.';
+      toast.error('Screenshot failed', msg);
     } finally {
       setSharing(false);
     }
@@ -148,7 +167,7 @@ export function TrackerPage() {
               <p className="label-micro">Bet tracker · {formatDate(day)}</p>
             </div>
             <div className="text-right">
-              <DayTotal services={services} day={day} bets={bets} unitSizes={unitSizes} betUnits={betUnits} defaultUnitSize={DEFAULT_UNIT_SIZE} />
+              <DayTotal services={services} day={day} bets={bets} unitSizes={unitSizes} betUnits={betUnits} manualBets={manualBets} defaultUnitSize={DEFAULT_UNIT_SIZE} />
             </div>
           </div>
 
@@ -161,6 +180,9 @@ export function TrackerPage() {
               unitSize={unitSizeFor(svc)}
               betUnits={betUnits}
               setUnits={setUnits}
+              manual={manualBets.filter((m) => m.service === svc && m.day === day)}
+              onAddManual={(name, units) => addManual(svc, name, units)}
+              onRemoveManual={removeManual}
             />
           ))}
         </div>
@@ -170,9 +192,9 @@ export function TrackerPage() {
 }
 
 /** Grand total across all tracked services for the header / screenshot. */
-function DayTotal({ services, day, bets, unitSizes, betUnits, defaultUnitSize }: {
+function DayTotal({ services, day, bets, unitSizes, betUnits, manualBets, defaultUnitSize }: {
   services: string[]; day: string; bets: import('@/types').Bet[];
-  unitSizes: Record<string, number>; betUnits: Record<string, number>; defaultUnitSize: number;
+  unitSizes: Record<string, number>; betUnits: Record<string, number>; manualBets: ManualBet[]; defaultUnitSize: number;
 }) {
   const { placed, missing } = useMemo(() => {
     let placed = 0, missing = 0;
@@ -184,8 +206,12 @@ function DayTotal({ services, day, bets, unitSizes, betUnits, defaultUnitSize }:
         missing += Math.max(0, unit * (betUnits[betGroupKey(g)] ?? 1) - g.stake);
       }
     }
+    for (const m of manualBets) {
+      if (m.day !== day || !services.includes(m.service)) continue;
+      missing += (unitSizes[m.service] ?? defaultUnitSize) * m.units;
+    }
     return { placed, missing };
-  }, [services, day, bets, unitSizes, betUnits, defaultUnitSize]);
+  }, [services, day, bets, unitSizes, betUnits, manualBets, defaultUnitSize]);
 
   return (
     <div className="flex items-center gap-4">
@@ -195,10 +221,15 @@ function DayTotal({ services, day, bets, unitSizes, betUnits, defaultUnitSize }:
   );
 }
 
-function ServiceDay({ service, day, bets, unitSize, betUnits, setUnits }: {
+function ServiceDay({ service, day, bets, unitSize, betUnits, setUnits, manual, onAddManual, onRemoveManual }: {
   service: string; day: string; bets: import('@/types').Bet[];
   unitSize: number; betUnits: Record<string, number>; setUnits: (key: string, units: number) => void;
+  manual: ManualBet[]; onAddManual: (name: string, units: number) => void; onRemoveManual: (id: string) => void;
 }) {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [units, setLocalUnits] = useState(1);
+
   const groups = useMemo(
     () => groupDuplicateBets(bets.filter((b) => b.service === service && b.date === day)),
     [bets, service, day],
@@ -207,15 +238,26 @@ function ServiceDay({ service, day, bets, unitSize, betUnits, setUnits }: {
   const totals = useMemo(() => {
     let placed = 0, missing = 0, profit = 0, target = 0;
     for (const g of groups) {
-      const units = betUnits[betGroupKey(g)] ?? 1;
-      const t = unitSize * units;
+      const t = unitSize * (betUnits[betGroupKey(g)] ?? 1);
       placed += g.stake;
       target += t;
       missing += Math.max(0, t - g.stake);
       profit += g.status === 'pending' || g.status === 'unknown' ? 0 : g.profit;
     }
+    // Manual "not placed" bets: nothing placed, whole target is missing.
+    for (const m of manual) {
+      const t = unitSize * m.units;
+      target += t;
+      missing += t;
+    }
     return { placed, missing, profit, target };
-  }, [groups, unitSize, betUnits]);
+  }, [groups, unitSize, betUnits, manual]);
+
+  const submit = () => {
+    if (!name.trim()) return;
+    onAddManual(name, units);
+    setName(''); setLocalUnits(1); setAdding(false);
+  };
 
   return (
     <SectionCard
@@ -231,7 +273,7 @@ function ServiceDay({ service, day, bets, unitSize, betUnits, setUnits }: {
       }
       bodyClassName="pt-2"
     >
-      {groups.length === 0 ? (
+      {groups.length === 0 && manual.length === 0 ? (
         <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No bets for {service} on this day.</p>
       ) : (
         <div className="overflow-x-auto">
@@ -260,11 +302,64 @@ function ServiceDay({ service, day, bets, unitSize, betUnits, setUnits }: {
                   />
                 );
               })}
+              {manual.map((m) => (
+                <ManualRow key={m.id} m={m} unitSize={unitSize} onRemove={() => onRemoveManual(m.id)} />
+              ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* Manually log a bet that should have been placed but wasn't in the sheet */}
+      <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+        {adding ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              autoFocus value={name} onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submit()}
+              placeholder="Bet that was missed (e.g. Bont 25+)"
+              className="input min-w-[200px] flex-1 py-1.5 text-sm"
+            />
+            <input
+              type="number" min={0} step={0.25} value={units}
+              onChange={(e) => setLocalUnits(Math.max(0, Number(e.target.value)))}
+              className="input no-spinner w-16 py-1.5 text-center text-sm tabular-nums"
+              list="unit-presets" title="Units"
+            />
+            <span className="text-xs text-slate-400">u = {moneyKpi(unitSize * units)}</span>
+            <button onClick={submit} className="btn-primary py-1.5">Add</button>
+            <button onClick={() => { setAdding(false); setName(''); }} className="btn-ghost py-1.5">Cancel</button>
+          </div>
+        ) : (
+          <button onClick={() => setAdding(true)} className="btn-ghost text-xs">
+            <Plus className="h-3.5 w-3.5" /> Add missed / not-placed bet
+          </button>
+        )}
+      </div>
     </SectionCard>
+  );
+}
+
+/** A bet that was meant to be placed but never made it into the sheet. */
+function ManualRow({ m, unitSize, onRemove }: { m: ManualBet; unitSize: number; onRemove: () => void }) {
+  const target = unitSize * m.units;
+  return (
+    <tr className="border-b border-amber-100 bg-amber-50/40 dark:border-amber-500/20 dark:bg-amber-500/5">
+      <td className="max-w-[260px] py-2 pr-2">
+        <span className="flex items-center gap-1.5">
+          <span className="block truncate font-medium text-slate-700 dark:text-slate-200" title={m.name}>{m.name}</span>
+          <button onClick={onRemove} className="text-slate-400 hover:text-rose-500" title="Remove"><X className="h-3 w-3" /></button>
+        </span>
+      </td>
+      <td className="py-2 pr-2 text-right tabular-nums text-slate-400">0</td>
+      <td className="py-2 pr-2 text-right tabular-nums text-slate-400">{money(0)}</td>
+      <td className="py-2 pr-2 text-center tabular-nums text-slate-500">{m.units}u</td>
+      <td className="py-2 pr-2 text-right tabular-nums text-slate-400">{money(target)}</td>
+      <td className="py-2 pr-2 text-right tabular-nums font-semibold text-amber-600 dark:text-amber-400">{money(target)}</td>
+      <td className="py-2 pr-1 text-right">
+        <span className="chip bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">Not placed</span>
+      </td>
+    </tr>
   );
 }
 
