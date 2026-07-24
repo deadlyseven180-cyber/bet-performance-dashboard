@@ -51,7 +51,7 @@ export function MultiSelect({
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-1 w-full min-w-[200px] rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+        <div className="absolute z-30 mt-1 w-full min-w-[180px] max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
           {options.length > 6 && (
             <input
               autoFocus

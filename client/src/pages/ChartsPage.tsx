@@ -51,7 +51,7 @@ export function ChartsPage() {
         <ProfitOverTimeChart bets={a.bets} granularity={gran} mode={mode} height={400} />
       </SectionCard>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-slate-500 dark:text-slate-400">Breakdowns — anything beyond the top N is grouped into “Other”.</p>
         <Segmented value={topN} onChange={setTopN} options={TOP_N_OPTIONS} />
       </div>

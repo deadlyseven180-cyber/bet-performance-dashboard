@@ -55,7 +55,7 @@ export function ReportsPage() {
       <ErrorBanner />
 
       <SectionCard title="Export Reports" subtitle="Every export respects the filters currently applied above.">
-        <div className="mb-5 flex flex-wrap items-center gap-4 rounded-xl bg-slate-50 p-4 dark:bg-slate-800/40">
+        <div className="mb-5 grid grid-cols-2 gap-4 rounded-xl bg-slate-50 p-4 sm:flex sm:flex-wrap sm:items-center dark:bg-slate-800/40">
           <Stat label="Bets in report" value={String(filteredBets.length)} />
           <Divider />
           <Stat label="Net Profit" value={moneyKpi(a.kpis.netProfit)} />
@@ -93,5 +93,5 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 function Divider() {
-  return <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />;
+  return <div className="hidden h-8 w-px bg-slate-200 sm:block dark:bg-slate-700" />;
 }

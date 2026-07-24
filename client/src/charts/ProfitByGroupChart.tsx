@@ -5,6 +5,7 @@ import { useChartColors, profitFill } from './chartTheme';
 import { makeTooltip } from './ChartTooltip';
 import { money, moneyCompact } from '@/utils/format';
 import { EmptyState } from '@/components/ui/primitives';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import { BarChart3 } from 'lucide-react';
 
 const TT = makeTooltip((v) => money(v));
@@ -16,6 +17,7 @@ const TT = makeTooltip((v) => money(v));
  */
 export function ProfitByGroupChart({ stats, limit = 10, height }: { stats: GroupStat[]; limit?: number; height?: number }) {
   const c = useChartColors();
+  const isMobile = useIsMobile();
   const data = withOther(stats, limit).reverse();
 
   if (!data.length) {
@@ -23,11 +25,11 @@ export function ProfitByGroupChart({ stats, limit = 10, height }: { stats: Group
   }
 
   return (
-    <ResponsiveContainer width="100%" height={height ?? Math.max(200, data.length * 40 + 20)}>
-      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+    <ResponsiveContainer width="100%" height={height ?? Math.max(200, data.length * (isMobile ? 32 : 40) + 20)}>
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: isMobile ? 8 : 16, left: 0, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={c.grid} horizontal={false} />
-        <XAxis type="number" tickFormatter={moneyCompact} tick={{ fill: c.axis, fontSize: 11 }} tickLine={false} axisLine={{ stroke: c.grid }} />
-        <YAxis type="category" dataKey="key" width={110} tick={{ fill: c.text, fontSize: 11 }} tickLine={false} axisLine={false} />
+        <XAxis type="number" tickFormatter={moneyCompact} tick={{ fill: c.axis, fontSize: isMobile ? 9 : 11 }} tickLine={false} axisLine={{ stroke: c.grid }} />
+        <YAxis type="category" dataKey="key" width={isMobile ? 76 : 110} tick={{ fill: c.text, fontSize: isMobile ? 9 : 11 }} tickLine={false} axisLine={false} />
         <Tooltip content={<TT />} cursor={{ fill: c.grid, opacity: 0.4 }} />
         <Bar dataKey="profit" name="Profit" radius={[0, 5, 5, 0]} maxBarSize={26}>
           {data.map((d, i) => <Cell key={i} fill={profitFill(d.profit)} />)}

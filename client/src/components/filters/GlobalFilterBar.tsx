@@ -79,23 +79,24 @@ export function GlobalFilterBar() {
   return (
     <div className="border-b border-slate-200 bg-white/60 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/40 sm:px-6">
       <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2">
-        <div className="relative min-w-[200px] flex-1">
+        <div className="relative w-full min-w-[180px] flex-1 sm:w-auto">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             value={filters.search}
             onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-            placeholder="Search selections, services, accounts…"
+            placeholder="Search selections, services…"
             className="input pl-9"
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-1">
+        {/* Scrolls sideways on phones rather than wrapping to three rows */}
+        <div className="-mx-1 flex w-full items-center gap-1 overflow-x-auto px-1 pb-0.5 sm:mx-0 sm:w-auto sm:overflow-visible sm:pb-0">
           {presets.map((p) => (
             <button
               key={p.label}
               onClick={() => setFilters((f) => ({ ...f, dateFrom: p.from, dateTo: p.to }))}
               className={clsx(
-                'rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors',
+                'shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors',
                 activePreset?.label === p.label
                   ? 'bg-brand-600 text-white'
                   : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800',

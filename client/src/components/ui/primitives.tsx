@@ -15,15 +15,15 @@ export function SectionCard({
   return (
     <section className={clsx('card animate-fade-in', className)}>
       {(title || action) && (
-        <header className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-          <div>
+        <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 border-b border-slate-100 px-4 py-3.5 sm:px-5 sm:py-4 dark:border-slate-800">
+          <div className="min-w-0">
             {title && <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</h3>}
             {subtitle && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>}
           </div>
-          {action}
+          {action && <div className="max-w-full overflow-x-auto">{action}</div>}
         </header>
       )}
-      <div className={clsx('p-5', bodyClassName)}>{children}</div>
+      <div className={clsx('p-4 sm:p-5', bodyClassName)}>{children}</div>
     </section>
   );
 }
@@ -61,7 +61,7 @@ export function Segmented<T extends string>({ value, options, onChange }: {
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="inline-flex rounded-xl bg-slate-100 p-0.5 dark:bg-slate-800">
+    <div className="inline-flex shrink-0 rounded-xl bg-slate-100 p-0.5 dark:bg-slate-800">
       {options.map((o) => (
         <button
           key={o.value}

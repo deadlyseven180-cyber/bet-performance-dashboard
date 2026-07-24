@@ -96,7 +96,62 @@ export function BetHistoryTable({ bets, dims }: { bets: Bet[]; dims: Dimensions 
 
   return (
     <div>
-      <div className="max-h-[70vh] overflow-auto rounded-xl border border-slate-100 dark:border-slate-800">
+      {/* Phones can't use the sortable column headers, so expose sorting here */}
+      <div className="mb-3 flex items-center gap-2 sm:hidden">
+        <select
+          value={sortKey}
+          onChange={(e) => { setSortKey(e.target.value as SortKey); setPage(0); }}
+          className="input py-1.5 text-xs"
+          aria-label="Sort by"
+        >
+          {cols.map((c) => <option key={c.key} value={c.key}>Sort: {c.label}</option>)}
+        </select>
+        <button
+          onClick={() => setDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+          className="btn-ghost shrink-0 px-2.5 py-1.5 text-xs"
+          title={dir === 'asc' ? 'Ascending' : 'Descending'}
+        >
+          {dir === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+        </button>
+      </div>
+
+      {/* Phones: stacked cards — a 12-column table is unusable at 360px wide */}
+      <ul className="space-y-2 sm:hidden">
+        {rows.map((b) => (
+          <li key={b.id} className="rounded-xl border border-slate-100 p-3 dark:border-slate-800">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {b.selection || b.event || '—'}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+                  {[formatDate(b.date), dims.sport ? b.sport : null, dims.betPlatform ? b.betPlatform : null]
+                    .filter(Boolean).join(' • ')}
+                </p>
+              </div>
+              <span className={clsx('chip shrink-0', STATUS_STYLE[b.status])}>
+                {STATUS_LABEL[b.status]}
+                {b.statusInferred && <Sparkles className="h-3 w-3" aria-label="Inferred" />}
+              </span>
+            </div>
+            <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-slate-50 pt-2 text-xs dark:border-slate-800/60">
+              <span className="text-slate-500 dark:text-slate-400">
+                {money(b.stake)} @ {decimalOdds(b.odds)}
+              </span>
+              <span className={clsx('text-sm font-bold tabular-nums', profitColor(b.profit))}>
+                {b.status === 'pending' ? '—' : `${b.profit > 0 ? '+' : ''}${money(b.profit)}`}
+              </span>
+            </div>
+            {(dims.service || dims.account) && (
+              <p className="mt-1.5 truncate text-[11px] text-slate-400 dark:text-slate-500">
+                {[dims.service ? b.service : null, dims.account ? b.account : null].filter(Boolean).join(' · ')}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      <div className="hidden max-h-[70vh] overflow-auto rounded-xl border border-slate-100 sm:block dark:border-slate-800">
         <table className="w-full min-w-[820px] text-sm">
           {/* Sticky header so column meaning survives long scrolls */}
           <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur dark:bg-slate-900/95">
