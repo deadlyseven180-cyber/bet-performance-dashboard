@@ -6,7 +6,9 @@ import { SectionCard } from '@/components/ui/primitives';
 import { ErrorBanner } from '@/components/dashboard/StatusBanners';
 import { useToast } from '@/components/ui/Toast';
 import { countActiveFilters } from '@/services/filters';
-import { moneyKpi, percent } from '@/utils/format';
+import { moneyKpi, percent, profitColor } from '@/utils/format';
+import { monthlySummary } from '@/services/analytics';
+import { useMemo } from 'react';
 
 export function ReportsPage() {
   const { filteredBets, filters } = useData();
@@ -14,6 +16,7 @@ export function ReportsPage() {
   const toast = useToast();
   const activeFilters = countActiveFilters(filters);
   const [busy, setBusy] = useState<string | null>(null);
+  const months = useMemo(() => monthlySummary(filteredBets), [filteredBets]);
 
   /**
    * xlsx + jsPDF are ~380KB of the bundle but are only needed here, so they're
@@ -67,7 +70,7 @@ export function ReportsPage() {
           <Stat label="Active filters" value={String(activeFilters)} />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 print:hidden">
           {formats.map((f) => (
             <div key={f.key} className="flex flex-col rounded-xl border border-slate-200 p-5 transition-shadow hover:shadow-card dark:border-slate-800">
               <f.icon className={`h-8 w-8 ${f.tone}`} />
@@ -79,6 +82,60 @@ export function ReportsPage() {
             </div>
           ))}
         </div>
+      </SectionCard>
+
+      {/* Useful on screen, not just as a download — and prints cleanly */}
+      <SectionCard
+        title="Monthly Summary"
+        subtitle="Month-by-month performance for the current filters"
+      >
+        {months.length === 0 ? (
+          <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No dated bets in the current selection.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
+                  <th className="py-2 pr-2 font-medium">Month</th>
+                  <th className="py-2 pr-2 text-right font-medium">Bets</th>
+                  <th className="py-2 pr-2 text-right font-medium">Staked</th>
+                  <th className="py-2 pr-2 text-right font-medium">Returned</th>
+                  <th className="py-2 pr-2 text-right font-medium">Win %</th>
+                  <th className="py-2 pr-2 text-right font-medium">ROI</th>
+                  <th className="py-2 pr-1 text-right font-medium">Profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {months.map((m) => (
+                  <tr key={m.month} className="border-b border-slate-50 last:border-0 dark:border-slate-800/60">
+                    <td className="py-2 pr-2 font-medium text-slate-700 dark:text-slate-200">{m.label}</td>
+                    <td className="py-2 pr-2 text-right tabular-nums text-slate-500">{m.bets.toLocaleString()}</td>
+                    <td className="py-2 pr-2 text-right tabular-nums text-slate-500">{moneyKpi(m.stake)}</td>
+                    <td className="py-2 pr-2 text-right tabular-nums text-slate-500">{moneyKpi(m.returns)}</td>
+                    <td className="py-2 pr-2 text-right tabular-nums text-slate-500">{percent(m.winRate)}</td>
+                    <td className={`py-2 pr-2 text-right tabular-nums font-medium ${profitColor(m.roi)}`}>
+                      {m.roi > 0 ? '+' : ''}{percent(m.roi)}
+                    </td>
+                    <td className={`py-2 pr-1 text-right tabular-nums font-semibold ${profitColor(m.profit)}`}>
+                      {m.profit > 0 ? '+' : ''}{moneyKpi(m.profit)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-200 font-semibold dark:border-slate-700">
+                  <td className="py-2 pr-2 text-slate-700 dark:text-slate-200">Total</td>
+                  <td className="py-2 pr-2 text-right tabular-nums">{a.kpis.totalBets.toLocaleString()}</td>
+                  <td className="py-2 pr-2 text-right tabular-nums">{moneyKpi(a.kpis.totalStake)}</td>
+                  <td className="py-2 pr-2 text-right tabular-nums">{moneyKpi(a.kpis.totalReturns)}</td>
+                  <td className="py-2 pr-2 text-right tabular-nums">{percent(a.kpis.winRate)}</td>
+                  <td className={`py-2 pr-2 text-right tabular-nums ${profitColor(a.kpis.roi)}`}>{percent(a.kpis.roi)}</td>
+                  <td className={`py-2 pr-1 text-right tabular-nums ${profitColor(a.kpis.netProfit)}`}>{moneyKpi(a.kpis.netProfit)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </SectionCard>
     </div>
   );

@@ -59,6 +59,21 @@ body {
   }
 }
 
+/* Printing: drop the app chrome and force a light, ink-friendly page */
+@media print {
+  aside, header, nav, .print\:hidden { display: none !important; }
+  .lg\:pl-64 { padding-left: 0 !important; }
+  body, .dark body { background: #fff !important; color: #000 !important; }
+  .card {
+    border: 1px solid #d7dbe0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+  main { max-width: none !important; padding: 0 !important; }
+  a[href]::after { content: ''; }
+}
+
 /* Thin, unobtrusive scrollbars */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { @apply rounded-full bg-slate-300 dark:bg-slate-700; }

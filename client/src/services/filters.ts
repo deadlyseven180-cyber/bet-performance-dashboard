@@ -63,6 +63,29 @@ export function filtersFromParams(p: URLSearchParams): Filters | null {
   return f;
 }
 
+/**
+ * The equivalent window immediately before the selected one, so KPIs can be
+ * shown as "vs previous period". Returns null when no date range is set
+ * (an all-time view has nothing to compare against).
+ */
+export function previousPeriod(f: Filters): Filters | null {
+  if (!f.dateFrom || !f.dateTo) return null;
+  const from = new Date(f.dateFrom + 'T00:00:00Z');
+  const to = new Date(f.dateTo + 'T00:00:00Z');
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+
+  const dayMs = 86400000;
+  const spanDays = Math.max(1, Math.round((to.getTime() - from.getTime()) / dayMs) + 1);
+  const prevTo = new Date(from.getTime() - dayMs);
+  const prevFrom = new Date(prevTo.getTime() - (spanDays - 1) * dayMs);
+
+  return {
+    ...f,
+    dateFrom: prevFrom.toISOString().slice(0, 10),
+    dateTo: prevTo.toISOString().slice(0, 10),
+  };
+}
+
 export function countActiveFilters(f: Filters): number {
   let n = 0;
   if (f.dateFrom) n++;

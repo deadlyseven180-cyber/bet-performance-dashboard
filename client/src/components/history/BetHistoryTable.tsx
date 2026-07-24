@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Inbox, Sparkles } from 'lucide-react';
 import type { Bet } from '@/types';
@@ -39,6 +39,7 @@ export function BetHistoryTable({ bets, dims }: { bets: Bet[]; dims: Dimensions 
   const [dir, setDir] = useState<Dir>('desc');
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   // Only render columns whose underlying data actually exists in this sheet.
   const cols = useMemo(() => COLS.filter((c) => !c.dim || dims[c.dim]), [dims]);
@@ -175,19 +176,30 @@ export function BetHistoryTable({ bets, dims }: { bets: Bet[]; dims: Dimensions 
           </thead>
           <tbody>
             {rows.map((b, i) => (
-              <tr
-                key={b.id}
-                className={clsx(
-                  'border-b border-slate-50 hover:bg-brand-50/40 dark:border-slate-800/60 dark:hover:bg-slate-800/50',
-                  i % 2 === 1 && 'bg-slate-50/50 dark:bg-slate-800/20',
+              <Fragment key={b.id}>
+                <tr
+                  onClick={() => setExpanded((id) => (id === b.id ? null : b.id))}
+                  className={clsx(
+                    'cursor-pointer border-b border-slate-50 hover:bg-brand-50/40 dark:border-slate-800/60 dark:hover:bg-slate-800/50',
+                    i % 2 === 1 && 'bg-slate-50/50 dark:bg-slate-800/20',
+                    expanded === b.id && 'bg-brand-50/60 dark:bg-slate-800/60',
+                  )}
+                  title="Click to see every field for this bet"
+                >
+                  {cols.map((col) => (
+                    <td key={col.key} className={clsx('max-w-[200px] truncate px-3 py-2.5', col.align)}>
+                      {cell(b, col.key)}
+                    </td>
+                  ))}
+                </tr>
+                {expanded === b.id && (
+                  <tr className="border-b border-slate-100 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/40">
+                    <td colSpan={cols.length} className="px-3 py-3">
+                      <BetDetail bet={b} />
+                    </td>
+                  </tr>
                 )}
-              >
-                {cols.map((col) => (
-                  <td key={col.key} className={clsx('max-w-[200px] truncate px-3 py-2.5', col.align)}>
-                    {cell(b, col.key)}
-                  </td>
-                ))}
-              </tr>
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -228,5 +240,46 @@ export function BetHistoryTable({ bets, dims }: { bets: Bet[]; dims: Dimensions 
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Every field for one bet, including columns the importer captured but that
+ * aren't mapped to a standard field (e.g. Daily Profit / Accumulated Profit).
+ */
+function BetDetail({ bet }: { bet: Bet }) {
+  const fields: [string, string][] = [
+    ['Date', formatDate(bet.date)],
+    ['Service', bet.service],
+    ['Account', bet.account],
+    ['Platform', bet.betPlatform],
+    ['Sport', bet.sport],
+    ['League', bet.league],
+    ['Event', bet.event],
+    ['Bet Type', bet.betType],
+    ['Selection', bet.selection],
+    ['Stake', money(bet.stake)],
+    ['Odds', decimalOdds(bet.odds)],
+    ['Status', bet.statusRaw || STATUS_LABEL[bet.status]],
+    ['Return', money(bet.returnAmount)],
+    ['Profit', money(bet.profit)],
+    ['Notes', bet.notes],
+    ...Object.entries(bet.extra),
+  ].filter(([, v]) => v !== '' && v !== 'Unknown' && v !== '—') as [string, string][];
+
+  return (
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
+      {fields.map(([k, v]) => (
+        <div key={k} className="min-w-0">
+          <dt className="text-[11px] uppercase tracking-wide text-slate-400">{k}</dt>
+          <dd className="truncate text-xs font-medium text-slate-700 dark:text-slate-200" title={v}>{v}</dd>
+        </div>
+      ))}
+      {bet.statusInferred && (
+        <div className="col-span-full text-[11px] text-amber-600 dark:text-amber-400">
+          ⚠ Win/loss was inferred from the profit and return amounts — this row had no usable status.
+        </div>
+      )}
+    </dl>
   );
 }

@@ -7,6 +7,8 @@ import { ProfitOverTimeChart, type ProfitMode } from '@/charts/ProfitOverTimeCha
 import { ProfitByGroupChart } from '@/charts/ProfitByGroupChart';
 import { WinRateByTypeChart } from '@/charts/WinRateByTypeChart';
 import { OddsDistributionChart, StakeDistributionChart } from '@/charts/DistributionCharts';
+import { DrawdownChart, OddsEdgeChart } from '@/charts/InsightCharts';
+import { useData } from '@/context/DataContext';
 import { decimalOdds, moneyKpi } from '@/utils/format';
 import type { Granularity } from '@/types';
 
@@ -16,8 +18,18 @@ const TOP_N_OPTIONS = [
   { value: '25', label: 'Top 25' },
 ];
 
+function GroupHeading({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 pt-1">
+      <h2 className="text-sm font-bold uppercase tracking-wide text-slate-700 dark:text-slate-200">{title}</h2>
+      {hint && <p className="text-xs text-slate-400">{hint}</p>}
+    </div>
+  );
+}
+
 export function ChartsPage() {
   const a = useAnalytics();
+  const { setFilters } = useData();
   const [gran, setGran] = useState<Granularity>('weekly');
   const [mode, setMode] = useState<ProfitMode>('both');
   const [topN, setTopN] = useState('10');
@@ -30,6 +42,8 @@ export function ChartsPage() {
   return (
     <div className="space-y-5">
       <ErrorBanner />
+
+      <GroupHeading title="Performance" hint="how the bankroll moved over time" />
 
       <SectionCard
         title="Profit Over Time"
@@ -51,16 +65,22 @@ export function ChartsPage() {
         <ProfitOverTimeChart bets={a.bets} granularity={gran} mode={mode} height={400} />
       </SectionCard>
 
+      <SectionCard title="Drawdown" subtitle="Distance below the running peak — the losing runs you had to survive">
+        <DrawdownChart bets={a.bets} granularity={gran} />
+      </SectionCard>
+
+      <GroupHeading title="Breakdowns" hint="who and what is making the money" />
+
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-slate-500 dark:text-slate-400">Breakdowns — anything beyond the top N is grouped into “Other”.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Click any bar to filter. Anything beyond the top N is grouped — anything beyond the top N is grouped into “Other”.</p>
         <Segmented value={topN} onChange={setTopN} options={TOP_N_OPTIONS} />
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <SectionCard title="Profit by Service"><ProfitByGroupChart stats={a.byService} limit={n} /></SectionCard>
-        {a.dims.account && <SectionCard title="Profit by Account"><ProfitByGroupChart stats={a.byAccount} limit={n} /></SectionCard>}
-        {a.dims.betPlatform && <SectionCard title="Profit by Betting Platform"><ProfitByGroupChart stats={a.byPlatform} limit={n} /></SectionCard>}
-        {a.dims.sport && <SectionCard title="Profit by Sport"><ProfitByGroupChart stats={a.bySport} limit={n} /></SectionCard>}
+        <SectionCard title="Profit by Service"><ProfitByGroupChart stats={a.byService} limit={n} onSelect={(k) => setFilters((f) => ({ ...f, services: [k] }))} /></SectionCard>
+        {a.dims.account && <SectionCard title="Profit by Account"><ProfitByGroupChart stats={a.byAccount} limit={n} onSelect={(k) => setFilters((f) => ({ ...f, accounts: [k] }))} /></SectionCard>}
+        {a.dims.betPlatform && <SectionCard title="Profit by Betting Platform"><ProfitByGroupChart stats={a.byPlatform} limit={n} onSelect={(k) => setFilters((f) => ({ ...f, platforms: [k] }))} /></SectionCard>}
+        {a.dims.sport && <SectionCard title="Profit by Sport"><ProfitByGroupChart stats={a.bySport} limit={n} onSelect={(k) => setFilters((f) => ({ ...f, sports: [k] }))} /></SectionCard>}
         {a.dims.league && <SectionCard title="Profit by League"><ProfitByGroupChart stats={a.byLeague} limit={n} /></SectionCard>}
       </div>
 
@@ -69,6 +89,15 @@ export function ChartsPage() {
           <WinRateByTypeChart bets={a.bets} />
         </SectionCard>
       )}
+
+      <GroupHeading title="Market & distribution" hint="pricing, stake sizing and whether you beat the book" />
+
+      <SectionCard
+        title="Are you beating the book?"
+        subtitle="Your actual win rate vs the rate each price implies. Bars above grey = an edge at that price."
+      >
+        <OddsEdgeChart bets={a.bets} />
+      </SectionCard>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <SectionCard

@@ -283,6 +283,113 @@ export function stakeDistribution(bets: Bet[]): { buckets: Bucket[]; avg: number
   return { buckets, avg };
 }
 
+// ── Drawdown ─────────────────────────────────────────────────────────────
+export interface DrawdownPoint {
+  label: string;
+  cumulative: number;
+  /** Distance below the running peak — always <= 0. */
+  drawdown: number;
+}
+
+/**
+ * Peak-to-trough decline of the cumulative profit curve. For a syndicate the
+ * worst drawdown is as important as the headline profit: it's the losing run
+ * you had to survive.
+ */
+export function drawdownSeries(points: TimePoint[]): { series: DrawdownPoint[]; maxDrawdown: number } {
+  let peak = 0;
+  let maxDrawdown = 0;
+  const series = points.map((p) => {
+    if (p.cumulative > peak) peak = p.cumulative;
+    const dd = p.cumulative - peak;
+    if (dd < maxDrawdown) maxDrawdown = dd;
+    return { label: p.label, cumulative: p.cumulative, drawdown: dd };
+  });
+  return { series, maxDrawdown };
+}
+
+// ── Odds edge: are we beating the book? ──────────────────────────────────
+export interface OddsEdgeRow {
+  label: string;
+  /** Win rate the market implies (1/odds, averaged over the band). */
+  implied: number;
+  /** Win rate actually achieved. */
+  actual: number;
+  bets: number;
+  profit: number;
+}
+
+export function oddsEdge(bets: Bet[]): OddsEdgeRow[] {
+  const rows: OddsEdgeRow[] = ODDS_BANDS.map(([, , label]) => ({ label, implied: 0, actual: 0, bets: 0, profit: 0 }));
+  const impliedSum = new Array(ODDS_BANDS.length).fill(0);
+  const decided = new Array(ODDS_BANDS.length).fill(0);
+  const won = new Array(ODDS_BANDS.length).fill(0);
+
+  for (const b of bets) {
+    if (b.odds <= 1) continue;
+    const i = ODDS_BANDS.findIndex(([lo, hi]) => b.odds >= lo && b.odds < hi);
+    if (i < 0) continue;
+    rows[i].bets++;
+    impliedSum[i] += 1 / b.odds;
+    if (isSettled(b)) rows[i].profit += b.profit;
+    if (b.status === 'won' || b.status === 'lost') {
+      decided[i]++;
+      if (b.status === 'won') won[i]++;
+    }
+  }
+
+  return rows.map((r, i) => ({
+    ...r,
+    implied: r.bets > 0 ? (impliedSum[i] / r.bets) * 100 : 0,
+    actual: decided[i] > 0 ? (won[i] / decided[i]) * 100 : 0,
+  })).filter((r) => r.bets > 0);
+}
+
+// ── Monthly summary table ────────────────────────────────────────────────
+export interface MonthRow {
+  month: string;
+  label: string;
+  bets: number;
+  stake: number;
+  returns: number;
+  profit: number;
+  roi: number;
+  winRate: number;
+}
+
+export function monthlySummary(bets: Bet[]): MonthRow[] {
+  const map = new Map<string, MonthRow>();
+  for (const b of bets) {
+    if (!b.date) continue;
+    const month = b.date.slice(0, 7);
+    let row = map.get(month);
+    if (!row) {
+      const d = new Date(month + '-01T00:00:00Z');
+      row = {
+        month,
+        label: d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric', timeZone: 'UTC' }),
+        bets: 0, stake: 0, returns: 0, profit: 0, roi: 0, winRate: 0,
+      };
+      map.set(month, row);
+    }
+    row.bets++;
+    row.stake += b.stake;
+    if (isSettled(b)) {
+      row.returns += b.returnAmount;
+      row.profit += b.profit;
+    }
+  }
+  const rows = [...map.values()].sort((a, b) => a.month.localeCompare(b.month));
+  for (const r of rows) {
+    const inMonth = bets.filter((b) => b.date?.startsWith(r.month));
+    const won = inMonth.filter((b) => b.status === 'won').length;
+    const lost = inMonth.filter((b) => b.status === 'lost').length;
+    r.roi = r.stake > 0 ? (r.profit / r.stake) * 100 : 0;
+    r.winRate = won + lost > 0 ? (won / (won + lost)) * 100 : 0;
+  }
+  return rows;
+}
+
 // ── Distinct value helpers (for filter option lists) ─────────────────────
 /**
  * Which dimensions actually carry data in this spreadsheet. Sheets vary wildly

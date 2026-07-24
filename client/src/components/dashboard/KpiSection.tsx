@@ -10,7 +10,7 @@ import { moneyKpi, percent, number as fmtNum, decimalOdds } from '@/utils/format
  * single quantity, not four independent metrics), and the rest sit in a
  * compact secondary strip.
  */
-export function KpiSection({ kpis, loading }: { kpis: Kpis; loading?: boolean }) {
+export function KpiSection({ kpis, prev, loading }: { kpis: Kpis; prev?: Kpis | null; loading?: boolean }) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -19,6 +19,7 @@ export function KpiSection({ kpis, loading }: { kpis: Kpis; loading?: boolean })
           value={moneyKpi(kpis.netProfit)}
           delta={kpis.netProfit}
           sub={`from ${moneyKpi(kpis.settledStake)} settled`}
+          compare={prev ? { current: kpis.netProfit, previous: prev.netProfit, kind: 'money' } : undefined}
           loading={loading}
         />
         <HeroCard
@@ -26,12 +27,14 @@ export function KpiSection({ kpis, loading }: { kpis: Kpis; loading?: boolean })
           value={percent(kpis.roi)}
           delta={kpis.roi}
           sub="return on settled stake"
+          compare={prev ? { current: kpis.roi, previous: prev.roi, kind: 'points' } : undefined}
           loading={loading}
         />
         <HeroCard
           label="Win Rate"
           value={percent(kpis.winRate)}
           sub={`${fmtNum(kpis.won)} of ${fmtNum(kpis.won + kpis.lost)} decided`}
+          compare={prev ? { current: kpis.winRate, previous: prev.winRate, kind: 'points' } : undefined}
           loading={loading}
         />
       </div>
@@ -50,8 +53,38 @@ export function KpiSection({ kpis, loading }: { kpis: Kpis; loading?: boolean })
   );
 }
 
-function HeroCard({ label, value, sub, delta, loading }: {
-  label: string; value: string; sub?: string; delta?: number; loading?: boolean;
+interface Compare { current: number; previous: number; kind: 'money' | 'points' }
+
+/** "vs previous period" badge — a KPI without a baseline is hard to judge. */
+function ComparisonBadge({ compare }: { compare: Compare }) {
+  const { current, previous, kind } = compare;
+  const diff = current - previous;
+  if (!Number.isFinite(diff) || Math.abs(diff) < 0.005) {
+    return <span className="text-[11px] text-slate-400">no change vs prev period</span>;
+  }
+  const up = diff > 0;
+  const Icon = up ? ArrowUpRight : ArrowDownRight;
+  const text = kind === 'money'
+    ? moneyKpi(Math.abs(diff))
+    : `${Math.abs(diff).toFixed(1)} pts`;
+  // Percentage change only makes sense for money with a non-trivial baseline.
+  const pct = kind === 'money' && Math.abs(previous) > 1
+    ? ` (${up ? '+' : '−'}${Math.abs((diff / Math.abs(previous)) * 100).toFixed(0)}%)`
+    : '';
+  return (
+    <span className={clsx(
+      'inline-flex items-center gap-0.5 text-[11px] font-medium',
+      up ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400',
+    )}>
+      <Icon className="h-3 w-3" aria-hidden />
+      {up ? '+' : '−'}{text}{pct}
+      <span className="font-normal text-slate-400"> vs prev period</span>
+    </span>
+  );
+}
+
+function HeroCard({ label, value, sub, delta, compare, loading }: {
+  label: string; value: string; sub?: string; delta?: number; compare?: Compare; loading?: boolean;
 }) {
   const dir = delta === undefined ? 0 : delta > 0 ? 1 : delta < 0 ? -1 : 0;
   const Icon = dir > 0 ? ArrowUpRight : dir < 0 ? ArrowDownRight : Minus;
@@ -72,7 +105,12 @@ function HeroCard({ label, value, sub, delta, loading }: {
           <p title={value} className={clsx('truncate text-2xl font-bold tabular-nums sm:text-3xl', tone)}>{value}</p>
         </div>
       )}
-      {sub && !loading && <p className="mt-1 truncate text-xs text-slate-400 dark:text-slate-500">{sub}</p>}
+      {!loading && (
+        <div className="mt-1 space-y-0.5">
+          {compare ? <ComparisonBadge compare={compare} /> : null}
+          {sub && <p className="truncate text-xs text-slate-400 dark:text-slate-500">{sub}</p>}
+        </div>
+      )}
     </div>
   );
 }
@@ -114,12 +152,14 @@ function SettlementCard({ kpis, loading }: { kpis: Kpis; loading?: boolean }) {
         </div>
       )}
 
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {/* Value sits immediately after its own label, so it can't read as
+          belonging to the next legend item. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
         {SEGMENTS.map((s) => (
-          <div key={s.key} className="flex items-center gap-2">
-            <span className={clsx('h-2 w-2 shrink-0 rounded-full', s.cls)} />
+          <div key={s.key} className="flex items-baseline gap-1.5">
+            <span className={clsx('h-2 w-2 shrink-0 translate-y-[-1px] rounded-full', s.cls)} />
             <span className="text-xs text-slate-500 dark:text-slate-400">{s.label}</span>
-            <span className={clsx('ml-auto text-sm font-semibold tabular-nums', s.text)}>
+            <span className={clsx('text-sm font-semibold tabular-nums', s.text)}>
               {loading ? '—' : fmtNum(counts[s.key])}
             </span>
           </div>

@@ -15,7 +15,11 @@ const TT = makeTooltip((v) => money(v));
  * Everything beyond the top N is rolled into a single "Other" bar so a long
  * tail is represented rather than silently dropped.
  */
-export function ProfitByGroupChart({ stats, limit = 10, height }: { stats: GroupStat[]; limit?: number; height?: number }) {
+export function ProfitByGroupChart({ stats, limit = 10, height, onSelect }: {
+  stats: GroupStat[]; limit?: number; height?: number;
+  /** Clicking a bar drills the whole dashboard down to that value. */
+  onSelect?: (key: string) => void;
+}) {
   const c = useChartColors();
   const isMobile = useIsMobile();
   const data = withOther(stats, limit).reverse();
@@ -31,7 +35,17 @@ export function ProfitByGroupChart({ stats, limit = 10, height }: { stats: Group
         <XAxis type="number" tickFormatter={moneyCompact} tick={{ fill: c.axis, fontSize: isMobile ? 9 : 11 }} tickLine={false} axisLine={{ stroke: c.grid }} />
         <YAxis type="category" dataKey="key" width={isMobile ? 76 : 110} tick={{ fill: c.text, fontSize: isMobile ? 9 : 11 }} tickLine={false} axisLine={false} />
         <Tooltip content={<TT />} cursor={{ fill: c.grid, opacity: 0.4 }} />
-        <Bar dataKey="profit" name="Profit" radius={[0, 5, 5, 0]} maxBarSize={26}>
+        <Bar
+          dataKey="profit"
+          name="Profit"
+          radius={[0, 5, 5, 0]}
+          maxBarSize={26}
+          cursor={onSelect ? 'pointer' : undefined}
+          onClick={onSelect ? (d: { key?: string }) => {
+            // "Other (n)" is an aggregate, not a real value — not drillable.
+            if (d?.key && !d.key.startsWith('Other (')) onSelect(d.key);
+          } : undefined}
+        >
           {data.map((d, i) => <Cell key={i} fill={profitFill(d.profit)} />)}
         </Bar>
       </BarChart>
