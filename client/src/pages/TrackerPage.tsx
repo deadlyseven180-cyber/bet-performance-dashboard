@@ -196,27 +196,30 @@ function DayTotal({ services, day, bets, unitSizes, betUnits, manualBets, defaul
   services: string[]; day: string; bets: import('@/types').Bet[];
   unitSizes: Record<string, number>; betUnits: Record<string, number>; manualBets: ManualBet[]; defaultUnitSize: number;
 }) {
-  const { placed, missing } = useMemo(() => {
-    let placed = 0, missing = 0;
+  const { placed, missing, over } = useMemo(() => {
+    let placed = 0, missing = 0, over = 0;
     for (const svc of services) {
       const unit = unitSizes[svc] ?? defaultUnitSize;
       const groups = groupDuplicateBets(bets.filter((b) => b.service === svc && b.date === day));
       for (const g of groups) {
+        const t = unit * (betUnits[betGroupKey(g)] ?? 1);
         placed += g.stake;
-        missing += Math.max(0, unit * (betUnits[betGroupKey(g)] ?? 1) - g.stake);
+        missing += Math.max(0, t - g.stake);
+        over += Math.max(0, g.stake - t);
       }
     }
     for (const m of manualBets) {
       if (m.day !== day || !services.includes(m.service)) continue;
       missing += (unitSizes[m.service] ?? defaultUnitSize) * m.units;
     }
-    return { placed, missing };
+    return { placed, missing, over };
   }, [services, day, bets, unitSizes, betUnits, manualBets, defaultUnitSize]);
 
   return (
     <div className="flex items-center gap-4">
       <div><p className="label-micro">Placed</p><p className="text-sm font-bold tabular-nums text-slate-800 dark:text-slate-100">{moneyKpi(placed)}</p></div>
       <div><p className="label-micro">Missing</p><p className={clsx('text-sm font-bold tabular-nums', missing > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400')}>{moneyKpi(missing)}</p></div>
+      {over > 0 && <div><p className="label-micro">Over</p><p className="text-sm font-bold tabular-nums text-sky-600 dark:text-sky-400">{moneyKpi(over)}</p></div>}
     </div>
   );
 }
@@ -236,12 +239,13 @@ function ServiceDay({ service, day, bets, unitSize, betUnits, setUnits, manual, 
   );
 
   const totals = useMemo(() => {
-    let placed = 0, missing = 0, profit = 0, target = 0;
+    let placed = 0, missing = 0, over = 0, profit = 0, target = 0;
     for (const g of groups) {
       const t = unitSize * (betUnits[betGroupKey(g)] ?? 1);
       placed += g.stake;
       target += t;
       missing += Math.max(0, t - g.stake);
+      over += Math.max(0, g.stake - t);
       profit += g.status === 'pending' || g.status === 'unknown' ? 0 : g.profit;
     }
     // Manual "not placed" bets: nothing placed, whole target is missing.
@@ -250,7 +254,7 @@ function ServiceDay({ service, day, bets, unitSize, betUnits, setUnits, manual, 
       target += t;
       missing += t;
     }
-    return { placed, missing, profit, target };
+    return { placed, missing, over, profit, target };
   }, [groups, unitSize, betUnits, manual]);
 
   const submit = () => {
@@ -268,6 +272,7 @@ function ServiceDay({ service, day, bets, unitSize, betUnits, setUnits, manual, 
           <Stat label="Placed" value={moneyKpi(totals.placed)} />
           <Stat label="Target" value={moneyKpi(totals.target)} />
           <Stat label="Missing" value={moneyKpi(totals.missing)} tone={totals.missing > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'} />
+          {totals.over > 0 && <Stat label="Over" value={moneyKpi(totals.over)} tone="text-sky-600 dark:text-sky-400" />}
           <Stat label="P/L" value={`${totals.profit > 0 ? '+' : ''}${moneyKpi(totals.profit)}`} tone={profitColor(totals.profit)} />
         </div>
       }
@@ -285,7 +290,7 @@ function ServiceDay({ service, day, bets, unitSize, betUnits, setUnits, manual, 
                 <th className="py-2 pr-2 text-right font-medium">Placed</th>
                 <th className="py-2 pr-2 text-center font-medium">Units</th>
                 <th className="py-2 pr-2 text-right font-medium">Target</th>
-                <th className="py-2 pr-2 text-right font-medium">Missing</th>
+                <th className="py-2 pr-2 text-right font-medium">Missing / Over</th>
                 <th className="py-2 pr-1 text-right font-medium">Result</th>
               </tr>
             </thead>
@@ -371,7 +376,9 @@ function BetRow({ g, unitSize, units, onUnits }: {
   const [open, setOpen] = useState(false);
   const target = unitSize * units;
   const missing = Math.max(0, target - g.stake);
+  const over = Math.max(0, g.stake - target);
   const pct = target > 0 ? Math.min(100, (g.stake / target) * 100) : 100;
+  const barTone = missing > 0 ? 'bg-amber-400' : over > 0 ? 'bg-sky-500' : 'bg-emerald-500';
 
   return (
     <>
@@ -379,7 +386,7 @@ function BetRow({ g, unitSize, units, onUnits }: {
         <td className="max-w-[260px] cursor-pointer py-2 pr-2" onClick={() => setOpen((o) => !o)} title="Click to see each account's placement">
           <span className="block truncate font-medium text-slate-700 dark:text-slate-200" title={g.selection}>{g.selection || '—'}</span>
           <span className="mt-1 block h-1 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-            <span className={clsx('block h-full rounded-full', missing > 0 ? 'bg-amber-400' : 'bg-emerald-500')} style={{ width: `${pct}%` }} />
+            <span className={clsx('block h-full rounded-full', barTone)} style={{ width: `${pct}%` }} />
           </span>
         </td>
         <td className="cursor-pointer py-2 pr-2 text-right tabular-nums text-slate-500" onClick={() => setOpen((o) => !o)}>{g.placements}</td>
@@ -398,8 +405,14 @@ function BetRow({ g, unitSize, units, onUnits }: {
           </div>
         </td>
         <td className="py-2 pr-2 text-right tabular-nums text-slate-400">{money(target)}</td>
-        <td className={clsx('py-2 pr-2 text-right tabular-nums font-semibold', missing > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400')}>
-          {missing > 0 ? money(missing) : '✓ full'}
+        <td
+          className={clsx('py-2 pr-2 text-right tabular-nums font-semibold',
+            missing > 0 ? 'text-amber-600 dark:text-amber-400'
+              : over > 0 ? 'text-sky-600 dark:text-sky-400'
+              : 'text-emerald-600 dark:text-emerald-400')}
+          title={over > 0 ? `Overstaked by ${money(over)}` : missing > 0 ? `Short by ${money(missing)}` : 'Fully placed'}
+        >
+          {missing > 0 ? money(missing) : over > 0 ? `+${money(over)}` : '✓ full'}
         </td>
         <td className="cursor-pointer py-2 pr-1 text-right" onClick={() => setOpen((o) => !o)}>
           <span className={clsx('chip', STATUS_STYLE[g.status])}>{STATUS_LABEL[g.status]}</span>

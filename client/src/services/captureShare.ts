@@ -3,13 +3,23 @@
  * already bundled for PDF export, so it's imported on demand here too.
  */
 export async function captureToBlob(el: HTMLElement, background: string): Promise<Blob> {
+  // Wait for the web fonts to load, otherwise html2canvas measures with the
+  // fallback font and the (mono, tightly-tracked) numbers clip to garbage.
+  try { await (document as Document & { fonts?: { ready?: Promise<unknown> } }).fonts?.ready; } catch { /* ignore */ }
+
   const { default: html2canvas } = await import('html2canvas');
   const canvas = await html2canvas(el, {
     backgroundColor: background,
     scale: Math.min(2, window.devicePixelRatio || 1) * 1.5,
     useCORS: true,
     logging: false,
-    windowWidth: el.scrollWidth,
+    // Negative letter-spacing on tabular figures confuses html2canvas' glyph
+    // placement; neutralise it (and prevent wrapping) only in the capture.
+    onclone: (doc) => {
+      const style = doc.createElement('style');
+      style.textContent = '.tabular-nums{letter-spacing:normal !important;white-space:nowrap !important;}';
+      doc.head.appendChild(style);
+    },
   });
   return new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not create image'))), 'image/png'),
