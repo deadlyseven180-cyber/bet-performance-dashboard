@@ -54,11 +54,11 @@ body {
            dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-600;
   }
   .chip {
-    @apply inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-micro;
+    @apply inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.08em];
   }
   /* Small all-caps label used throughout instead of decorative headings. */
   .label-micro {
-    @apply text-[10px] font-semibold uppercase tracking-micro text-slate-400 dark:text-slate-500;
+    @apply text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500;
   }
   .skeleton {
     @apply relative overflow-hidden rounded-lg bg-slate-200/70 dark:bg-slate-800/70;
