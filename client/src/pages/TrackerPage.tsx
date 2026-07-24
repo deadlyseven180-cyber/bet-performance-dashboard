@@ -81,7 +81,7 @@ export function TrackerPage() {
                     type="number" min={0} step={100}
                     value={unitSizeFor(svc)}
                     onChange={(e) => setUnitSizes((t) => ({ ...t, [svc]: Number(e.target.value) || 0 }))}
-                    className="input w-28 py-1 text-sm"
+                    className="input no-spinner w-28 py-1 text-sm tabular-nums"
                   />
                   <span className="text-xs text-slate-400">= 1u</span>
                 </div>
@@ -223,7 +223,7 @@ function BetRow({ g, unitSize, units, onUnits }: {
             <input
               type="number" min={0} step={0.25} value={units}
               onChange={(e) => onUnits(Math.max(0, Number(e.target.value)))}
-              className="input w-16 py-1 text-center text-xs"
+              className="input no-spinner w-14 px-1.5 py-1 text-center text-xs tabular-nums"
               list="unit-presets"
               title="Units required for this bet"
             />
