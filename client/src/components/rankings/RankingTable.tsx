@@ -5,8 +5,6 @@ import { rankGroups } from '@/services/analytics';
 import { money, moneyKpi, percent, number as fmtNum, profitColor } from '@/utils/format';
 import { EmptyState } from '@/components/ui/primitives';
 
-const MEDAL = ['🥇', '🥈', '🥉'];
-
 export function RankingTable({
   stats, metric = 'profit', dir = 'desc', limit = 10, compact = false,
   minBets = 0, onSelect,
@@ -67,8 +65,11 @@ export function RankingTable({
                 )}
                 title={onSelect ? `Filter everything to “${g.key}”` : undefined}
               >
-                <td className="py-2 pl-1 pr-2 tabular-nums text-slate-400">
-                  {dir === 'desc' && i < 3 ? MEDAL[i] : i + 1}
+                <td className={clsx(
+                  'py-2 pl-1 pr-2 tabular-nums',
+                  dir === 'desc' && i < 3 ? 'font-semibold text-brand-500 dark:text-brand-400' : 'text-slate-400',
+                )}>
+                  {String(i + 1).padStart(2, '0')}
                 </td>
                 <td className="max-w-[170px] py-2 pr-2">
                   <div className="flex items-center gap-1.5">

@@ -17,8 +17,8 @@ export function SectionCard({
       {(title || action) && (
         <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 border-b border-slate-100 px-4 py-3.5 sm:px-5 sm:py-4 dark:border-slate-800">
           <div className="min-w-0">
-            {title && <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</h3>}
-            {subtitle && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>}
+            {title && <h3 className="text-[11px] font-semibold uppercase tracking-micro text-slate-700 dark:text-slate-200">{title}</h3>}
+            {subtitle && <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">{subtitle}</p>}
           </div>
           {action && <div className="max-w-full overflow-x-auto">{action}</div>}
         </header>
@@ -61,16 +61,16 @@ export function Segmented<T extends string>({ value, options, onChange }: {
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="inline-flex shrink-0 rounded-xl bg-slate-100 p-0.5 dark:bg-slate-800">
+    <div className="inline-flex shrink-0 rounded-sm border border-slate-200 p-0.5 dark:border-slate-800">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
           className={clsx(
-            'rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
+            'rounded-sm px-2.5 py-1 text-[11px] font-semibold uppercase tracking-micro transition-colors',
             value === o.value
-              ? 'bg-white text-brand-600 shadow-sm dark:bg-slate-700 dark:text-brand-300'
-              : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200',
+              ? 'bg-brand-400 text-slate-950'
+              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
           )}
         >
           {o.label}

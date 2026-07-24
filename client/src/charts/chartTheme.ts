@@ -2,14 +2,15 @@ import { useEffect, useState } from 'react';
 
 /** Categorical palette — readable on both light and dark backgrounds. */
 export const CATEGORICAL = [
-  '#3b63f6', '#0ea5e9', '#14b8a6', '#8b5cf6', '#f59e0b',
-  '#ec4899', '#22c55e', '#ef4444', '#64748b', '#a855f7',
+  '#e8b923', '#5fb3c9', '#c98a5f', '#8f9bb3', '#7fbf8a',
+  '#c96f6f', '#9a8fc9', '#c9b45f', '#6f8fa8', '#a8926f',
 ];
 
-export const POSITIVE = '#10b981';
-export const NEGATIVE = '#f43f5e';
-export const NEUTRAL = '#94a3b8';
-export const BRAND = '#3b63f6';
+/** Profit/loss stay green/red; the gold accent is never used for either. */
+export const POSITIVE = '#2fbf87';
+export const NEGATIVE = '#e5575a';
+export const NEUTRAL = '#79838f';
+export const BRAND = '#e8b923';
 
 export const profitFill = (v: number) => (v >= 0 ? POSITIVE : NEGATIVE);
 
@@ -32,10 +33,10 @@ export function useChartColors() {
   const dark = useIsDark();
   return {
     dark,
-    grid: dark ? '#1e293b' : '#eef2f7',
-    axis: dark ? '#64748b' : '#94a3b8',
-    text: dark ? '#cbd5e1' : '#475569',
-    tooltipBg: dark ? '#0f172a' : '#ffffff',
-    tooltipBorder: dark ? '#1e293b' : '#e2e8f0',
+    grid: dark ? '#1b222b' : '#e6e9ec',
+    axis: dark ? '#586371' : '#aeb6bf',
+    text: dark ? '#aeb6bf' : '#3d4652',
+    tooltipBg: dark ? '#0f141a' : '#ffffff',
+    tooltipBorder: dark ? '#28303a' : '#d5dade',
   };
 }

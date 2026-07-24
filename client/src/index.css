@@ -11,39 +11,54 @@ html, body, #root {
 }
 
 body {
-  @apply bg-slate-50 text-slate-800 antialiased;
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  @apply bg-slate-100 text-slate-800 antialiased;
 }
 
 .dark body {
   @apply bg-slate-950 text-slate-200;
 }
 
+/**
+ * Every figure in the app is set in the mono face with tabular figures, so
+ * columns of numbers align to the pixel. Components already mark numbers with
+ * `tabular-nums`, so this re-skins all of them at once.
+ */
+.tabular-nums {
+  font-family: theme('fontFamily.mono');
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
 @layer components {
+  /* Panels: a hairline and a flat surface. No shadows, no soft corners. */
   .card {
-    @apply rounded-2xl border border-slate-200 bg-white shadow-card transition-colors
-           dark:border-slate-800 dark:bg-slate-900 dark:shadow-card-dark;
+    @apply rounded border border-slate-200 bg-white transition-colors
+           dark:border-slate-800 dark:bg-slate-900;
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold
-           transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60
-           disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded px-3 py-1.5 text-xs font-semibold
+           transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-400
+           disabled:cursor-not-allowed disabled:opacity-40;
   }
   .btn-primary {
-    @apply btn bg-brand-600 text-white hover:bg-brand-700 active:scale-[.98];
+    @apply btn bg-brand-400 text-slate-950 hover:bg-brand-300;
   }
   .btn-ghost {
-    @apply btn border border-slate-200 bg-white text-slate-700 hover:bg-slate-50
-           dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800;
+    @apply btn border border-slate-300 bg-transparent text-slate-600 hover:border-slate-400 hover:text-slate-900
+           dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:text-slate-100;
   }
   .input {
-    @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800
-           placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30
-           dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500;
+    @apply w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-800
+           placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400/40
+           dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-600;
   }
   .chip {
-    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-micro;
+  }
+  /* Small all-caps label used throughout instead of decorative headings. */
+  .label-micro {
+    @apply text-[10px] font-semibold uppercase tracking-micro text-slate-400 dark:text-slate-500;
   }
   .skeleton {
     @apply relative overflow-hidden rounded-lg bg-slate-200/70 dark:bg-slate-800/70;

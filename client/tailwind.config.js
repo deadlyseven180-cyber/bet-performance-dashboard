@@ -5,26 +5,67 @@ export default {
   theme: {
     extend: {
       colors: {
+        /**
+         * Neutral ramp re-mapped to a near-black terminal palette. Overriding
+         * `slate` rather than renaming means the whole app re-skins without
+         * touching class names in components.
+         */
+        slate: {
+          50: '#f6f7f8',
+          100: '#eaecef',
+          200: '#d5dade',
+          300: '#aeb6bf',
+          400: '#79838f',
+          500: '#586371',
+          600: '#3d4652',
+          700: '#28303a',
+          800: '#171d25',
+          900: '#0f141a',
+          950: '#070a0d',
+        },
+        /** Accent is gold, not the usual indigo — and never green/red, which
+         *  are reserved for profit and loss. */
         brand: {
-          50: '#eef4ff', 100: '#d9e6ff', 200: '#bcd2ff', 300: '#8eb4ff',
-          400: '#598aff', 500: '#3b63f6', 600: '#2544eb', 700: '#1e34d0',
-          800: '#1f2fa8', 900: '#1f2e85', 950: '#171d4f',
+          50: '#fdf9e9',
+          100: '#faefc2',
+          200: '#f5df89',
+          300: '#efcb4e',
+          400: '#e8b923',
+          500: '#d3a30f',
+          600: '#ad800b',
+          700: '#87620f',
+          800: '#6d4e13',
+          900: '#5c4215',
+          950: '#352307',
         },
       },
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['"IBM Plex Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
-      borderRadius: { xl: '0.9rem', '2xl': '1.25rem' },
+      /** Hard, near-square corners — panels, not pills. */
+      borderRadius: {
+        DEFAULT: '3px',
+        sm: '2px',
+        md: '3px',
+        lg: '4px',
+        xl: '5px',
+        '2xl': '6px',
+        '3xl': '8px',
+      },
       boxShadow: {
-        card: '0 1px 3px rgba(16,24,40,0.06), 0 1px 2px rgba(16,24,40,0.04)',
-        'card-dark': '0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3)',
+        card: 'none',
+        'card-dark': 'none',
+      },
+      letterSpacing: {
+        micro: '0.08em',
       },
       keyframes: {
-        'fade-in': { '0%': { opacity: '0', transform: 'translateY(6px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+        'fade-in': { '0%': { opacity: '0', transform: 'translateY(4px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
         shimmer: { '100%': { transform: 'translateX(100%)' } },
       },
       animation: {
-        'fade-in': 'fade-in 0.35s ease-out both',
+        'fade-in': 'fade-in 0.2s ease-out both',
       },
     },
   },
