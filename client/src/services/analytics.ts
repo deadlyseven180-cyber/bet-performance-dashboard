@@ -27,6 +27,20 @@ function normalizeSelection(s: string): string {
     .trim();
 }
 
+/**
+ * Some services label a day's multi-leg bets "BET 1 :", "BET 2 :" and so on.
+ * Accounts often end up with slightly different legs (one gets "Pies +50.5"
+ * where another gets "Daicos"), so the leg text can't be matched — but the
+ * label itself identifies the bet. When present it takes precedence over the
+ * selection text as the matching key.
+ */
+const BET_LABEL = /^\s*bet\s*#?\s*(\d+)\s*[:\-]/i;
+
+function selectionKey(selection: string): string {
+  const m = String(selection || '').match(BET_LABEL);
+  return m ? `bet ${m[1]}` : normalizeSelection(selection);
+}
+
 /** One logical bet, possibly placed across several accounts/lines. */
 export interface BetGroup extends Bet {
   /** How many spreadsheet rows this logical bet came from. */
@@ -74,7 +88,7 @@ export function groupDuplicateBets(bets: Bet[]): BetGroup[] {
   const buckets = new Map<string, Bet[]>();
   const order: string[] = [];
   for (const b of bets) {
-    const sel = normalizeSelection(b.selection);
+    const sel = selectionKey(b.selection);
     // A row with no usable selection can't be matched to anything — keep it
     // standalone rather than lumping blank selections together.
     const key = sel ? `${b.date ?? ''}|${b.service}|${b.sport}|${sel}` : `solo:${b.id}`;
