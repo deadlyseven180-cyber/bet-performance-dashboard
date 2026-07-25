@@ -27,6 +27,15 @@ const DEFAULT_UNIT_SIZE = 1000;
 const rep = (n: number) => `$${Math.round(n).toLocaleString('en-AU')}`;
 
 /**
+ * Name to show in the report. For labelled multis ("BET 16 : Daicos/Smith/…")
+ * just show the label ("BET 16 :") — the full leg list is noise in a chat.
+ */
+function reportName(selection: string): string {
+  const m = selection.match(/^\s*bet\b[\s#:.\-]*(\d+)\b/i);
+  return m ? `BET ${m[1]} :` : selection.trim();
+}
+
+/**
  * Build the plain-text report for a day — bets that are short of target (plus
  * manual not-placed ones), and separately any bets that were overstaked,
  * grouped by service. This is what the Share button copies to the group chat.
@@ -55,16 +64,16 @@ function buildMissingReport(opts: {
       const missing = t - g.stake;
       const over = g.stake - t;
       if (missing > 0.5) {
-        missLines.push(`• ${g.selection} — need ${rep(missing)} more (${rep(g.stake)}/${rep(t)})`);
+        missLines.push(`• ${reportName(g.selection)} need ${rep(missing)} more (${rep(g.stake)}/${rep(t)})`);
         svcMiss += missing;
       } else if (over > 0.5) {
-        overLines.push(`• ${g.selection} — +${rep(over)} over (${rep(g.stake)}/${rep(t)})`);
+        overLines.push(`• ${reportName(g.selection)} +${rep(over)} over (${rep(g.stake)}/${rep(t)})`);
         svcOver += over;
       }
     }
     for (const m of manualBets.filter((x) => x.day === day && x.service === svc)) {
       const t = unit * m.units;
-      missLines.push(`• ${m.name} — NOT PLACED (${rep(t)})`);
+      missLines.push(`• ${m.name} NOT PLACED (${rep(t)})`);
       svcMiss += t;
     }
 
