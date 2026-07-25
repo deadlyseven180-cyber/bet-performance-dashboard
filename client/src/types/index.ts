@@ -44,8 +44,8 @@ export type SyncStatus = 'idle' | 'loading' | 'success' | 'error';
 
 export interface AppConfig {
   dataSource: 'mock' | 'apikey' | 'service' | 'oauth';
-  defaultSpreadsheetId: string;
-  defaultWorksheet: string;
+  /** The single worksheet this app is locked to (server-controlled). */
+  worksheet: string;
 }
 
 export interface Filters {

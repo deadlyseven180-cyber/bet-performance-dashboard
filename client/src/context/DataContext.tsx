@@ -30,10 +30,6 @@ interface DataState {
   setFilters: (f: Filters | ((prev: Filters) => Filters)) => void;
   resetFilters: () => void;
 
-  spreadsheetId: string;
-  worksheet: string;
-  setSource: (spreadsheetId: string, worksheet: string) => void;
-
   refresh: (opts?: { silent?: boolean }) => Promise<void>;
 }
 
@@ -68,8 +64,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setSearchParams(filtersToParams(filters), { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
-  const [spreadsheetId, setSpreadsheetId] = useState<string>(() => localStorage.getItem('spreadsheetId') ?? '');
-  const [worksheet, setWorksheet] = useState<string>(() => localStorage.getItem('worksheet') ?? '');
 
   const timerRef = useRef<number | null>(null);
   const inFlight = useRef(false);
@@ -81,7 +75,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     // must not flicker the UI.
     setSyncStatus((s) => (s === 'idle' ? 'loading' : s));
     try {
-      const data = await sheetsApi.getBets(spreadsheetId || undefined, worksheet || undefined);
+      const data = await sheetsApi.getBets();
       setLastChecked(new Date().toISOString());
       setLive(true);
       setError(null);
@@ -113,16 +107,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
       inFlight.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spreadsheetId, worksheet, toast]);
+  }, [toast]);
 
   // Initial load: fetch server config, then bets.
   useEffect(() => {
     (async () => {
       try {
-        const cfg = await sheetsApi.getConfig();
-        setConfig(cfg);
-        if (!spreadsheetId && cfg.defaultSpreadsheetId) setSpreadsheetId(cfg.defaultSpreadsheetId);
-        if (!worksheet && cfg.defaultWorksheet) setWorksheet(cfg.defaultWorksheet);
+        setConfig(await sheetsApi.getConfig());
       } catch {
         /* config is best-effort */
       }
@@ -144,13 +135,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
   }, [refresh]);
 
-  const setSource = useCallback((sid: string, ws: string) => {
-    setSpreadsheetId(sid);
-    setWorksheet(ws);
-    localStorage.setItem('spreadsheetId', sid);
-    localStorage.setItem('worksheet', ws);
-  }, []);
-
   const resetFilters = useCallback(() => setFilters(EMPTY_FILTERS), []);
 
   const filteredBets = useMemo(() => applyFilters(bets, filters), [bets, filters]);
@@ -171,9 +155,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     filters,
     setFilters,
     resetFilters,
-    spreadsheetId,
-    worksheet,
-    setSource,
     refresh,
   };
 

@@ -1,26 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Database, Link2, RefreshCw, Clock, CheckCircle2, FileSpreadsheet, ExternalLink, Table2 } from 'lucide-react';
+import { Database, Link2, RefreshCw, Clock, CheckCircle2, FileSpreadsheet, Table2, Lock } from 'lucide-react';
 import { useData } from '@/context/DataContext';
 import { sheetsApi, type AuthStatus } from '@/api/sheets';
 import { SectionCard, Badge } from '@/components/ui/primitives';
 import { money } from '@/utils/format';
 
+/**
+ * Owner-only, local-only admin screen. The data source is LOCKED to a single
+ * spreadsheet + worksheet by the server; it can't be changed from the UI. To
+ * point the app at a different tab, change WORKSHEET_NAME in the server .env.
+ */
 export function SettingsPage() {
-  const { config, payload, spreadsheetId, worksheet, setSource, refresh, syncedAt, recordCount } = useData();
-  const [sid, setSid] = useState(spreadsheetId);
-  const [ws, setWs] = useState(worksheet);
+  const { config, payload, refresh, syncedAt, recordCount } = useData();
   const [auth, setAuth] = useState<AuthStatus | null>(null);
 
   useEffect(() => { sheetsApi.authStatus().then(setAuth).catch(() => setAuth(null)); }, []);
-  useEffect(() => { setSid(spreadsheetId); setWs(worksheet); }, [spreadsheetId, worksheet]);
 
-  const isMock = config?.dataSource === 'mock';
-  const worksheets = payload?.meta.worksheets ?? [];
-
-  const apply = async () => {
-    setSource(sid.trim(), ws.trim());
-    await refresh();
-  };
+  const worksheet = config?.worksheet ?? payload?.meta.worksheet ?? '—';
 
   return (
     <div className="space-y-5">
@@ -37,18 +33,8 @@ export function SettingsPage() {
             <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">Not connected</Badge>
           )}
           <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">Read-only</Badge>
+          <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Lock className="h-3.5 w-3.5" /> Locked to one tab</Badge>
         </div>
-
-        {isMock && (
-          <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-4 text-sm text-brand-800 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-200">
-            <p className="font-semibold">You're viewing sample data.</p>
-            <p className="mt-1 text-xs text-brand-700/80 dark:text-brand-200/80">
-              To connect your own Google Sheet, set <code className="rounded bg-white/60 px-1 dark:bg-black/20">DATA_SOURCE</code> in the server
-              <code className="rounded bg-white/60 px-1 dark:bg-black/20">.env</code> to <code>service</code>, <code>apikey</code> or <code>oauth</code>,
-              then add credentials. See the README for the 2-minute setup.
-            </p>
-          </div>
-        )}
 
         {config?.dataSource === 'oauth' && auth && !auth.connected && (
           <a href="/api/auth/google" className="btn-primary mt-4 inline-flex">
@@ -57,60 +43,28 @@ export function SettingsPage() {
         )}
       </SectionCard>
 
-      <SectionCard title="Spreadsheet" subtitle="Point the dashboard at any spreadsheet and worksheet tab">
+      <SectionCard title="Data source" subtitle="Fixed by the server for security — the app can only ever read this one tab">
         <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Spreadsheet ID</label>
-            <input
-              value={sid}
-              onChange={(e) => setSid(e.target.value)}
-              placeholder={isMock ? 'mock-spreadsheet' : '1AbC…the long id from the sheet URL'}
-              className="input"
-              disabled={isMock}
-            />
-            <p className="mt-1 text-xs text-slate-400">Found in the URL: docs.google.com/spreadsheets/d/<b>SPREADSHEET_ID</b>/edit</p>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Worksheet / Tab</label>
-            {worksheets.length > 0 ? (
-              <select value={ws} onChange={(e) => setWs(e.target.value)} className="input" disabled={isMock}>
-                {!worksheets.includes(ws) && ws && <option value={ws}>{ws}</option>}
-                {worksheets.map((w) => <option key={w} value={w}>{w}</option>)}
-              </select>
-            ) : (
-              <input value={ws} onChange={(e) => setWs(e.target.value)} placeholder="Sheet1" className="input" disabled={isMock} />
-            )}
-            <p className="mt-1 text-xs text-slate-400 flex items-center gap-1"><Table2 className="h-3 w-3" /> The exact tab name at the bottom of your sheet.</p>
-          </div>
+          <InfoTile icon={FileSpreadsheet} label="Spreadsheet" value={payload?.meta.spreadsheetTitle ?? '—'} />
+          <InfoTile icon={Table2} label="Worksheet (locked)" value={worksheet} />
         </div>
-        <div className="mt-4 flex gap-2">
-          <button onClick={apply} disabled={isMock} className="btn-primary"><RefreshCw className="h-4 w-4" /> Apply & Sync</button>
-          {sid && !isMock && (
-            <a href={`https://docs.google.com/spreadsheets/d/${sid}`} target="_blank" rel="noreferrer" className="btn-ghost">
-              <ExternalLink className="h-4 w-4" /> Open in Sheets
-            </a>
-          )}
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-300">
+          <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <p>
+            The app is hard-locked to the <b>{worksheet}</b> tab. No other tab in the spreadsheet is ever read or exposed — not
+            here, not on the hosted site, and not in the shared config database. To read a different tab, change
+            <code className="mx-1 rounded bg-white px-1 dark:bg-black/30">WORKSHEET_NAME</code> in the server’s
+            <code className="mx-1 rounded bg-white px-1 dark:bg-black/30">.env</code> and restart.
+          </p>
         </div>
       </SectionCard>
 
-      <SectionCard title="Sync" subtitle="Manual refresh and 60-second auto-sync">
+      <SectionCard title="Sync" subtitle="Live auto-sync every 10 seconds">
         <div className="grid gap-4 sm:grid-cols-3">
           <InfoTile icon={FileSpreadsheet} label="Spreadsheet" value={payload?.meta.spreadsheetTitle ?? '—'} />
           <InfoTile icon={Clock} label="Last Sync" value={syncedAt ? new Date(syncedAt).toLocaleString('en-AU') : 'Never'} />
           <InfoTile icon={Database} label="Records Loaded" value={String(recordCount)} />
         </div>
-
-        <div className="mt-5 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Live — auto-syncing</p>
-            <p className="text-xs text-emerald-600/80 dark:text-emerald-300/70">The sheet is re-read every 10 seconds automatically; changes appear on their own.</p>
-          </div>
-        </div>
-
         <button onClick={() => refresh()} className="btn-ghost mt-4"><RefreshCw className="h-4 w-4" /> Sync now</button>
       </SectionCard>
 

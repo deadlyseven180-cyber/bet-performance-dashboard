@@ -105,27 +105,34 @@ export async function fetchMeta(spreadsheetId: string): Promise<Omit<SheetMeta, 
 }
 
 /** Read every betting record, normalized. */
-export async function fetchBets(opts: {
-  spreadsheetId?: string;
-  worksheet?: string;
-  force?: boolean;
-}): Promise<BetsPayload> {
-  const worksheet = opts.worksheet || config.defaultWorksheet;
+/**
+ * Read the betting records.
+ *
+ * SECURITY: the app is hard-locked to a SINGLE worksheet, set only by the
+ * server's WORKSHEET_NAME env var. Any spreadsheet id or worksheet name a
+ * client might send is ignored, and we NEVER fall back to a different tab — if
+ * the configured tab is missing we error rather than read another one. No
+ * other tab is ever read, and the list of other tabs is never sent to clients.
+ */
+export async function fetchBets(opts: { force?: boolean } = {}): Promise<BetsPayload> {
+  const worksheet = config.defaultWorksheet; // fixed by server config only
   const syncedAt = new Date().toISOString();
 
   if (config.dataSource === 'mock') {
     const { bets, warnings } = normalizeRows(mockRows);
     return {
       bets, warnings, source: 'mock', syncedAt, recordCount: bets.length,
-      hash: hashRows(mockRows), meta: { ...mockMeta, worksheet },
+      hash: hashRows(mockRows),
+      meta: { spreadsheetId: mockMeta.spreadsheetId, spreadsheetTitle: mockMeta.spreadsheetTitle, worksheet, worksheets: [worksheet] },
     };
   }
 
-  const spreadsheetId = opts.spreadsheetId || config.defaultSpreadsheetId;
+  const spreadsheetId = config.defaultSpreadsheetId; // fixed by server config only
   if (!spreadsheetId)
-    throw new SheetsError('No spreadsheet selected. Provide a spreadsheet ID.', 400, 'NO_SPREADSHEET');
+    throw new SheetsError('No spreadsheet configured on the server.', 400, 'NO_SPREADSHEET');
+  if (!worksheet)
+    throw new SheetsError('No worksheet configured on the server.', 400, 'NO_WORKSHEET');
 
-  // Serve from cache when a very recent read exists (unless forced).
   const cacheKey = `${spreadsheetId}|${worksheet}`;
   const hit = responseCache.get(cacheKey);
   if (!opts.force && hit && Date.now() - hit.at < CACHE_TTL_MS) {
@@ -134,39 +141,34 @@ export async function fetchBets(opts: {
 
   try {
     const sheets = await getSheetsClient();
-
-    // 1) Read spreadsheet metadata FIRST so we know the real tab names.
     const metaInfo = await fetchMeta(spreadsheetId);
-    const warnings: string[] = [];
 
-    // 2) Resolve which worksheet to read. If the requested/configured tab
-    //    name doesn't exist, fall back to the first tab so connecting always
-    //    works — the user can then switch tabs from the Data Source page.
-    let resolved = worksheet;
-    if (metaInfo.worksheets.length && !metaInfo.worksheets.includes(resolved)) {
-      const fallback = metaInfo.worksheets[0];
-      if (resolved) warnings.push(`Worksheet "${resolved}" not found — showing "${fallback}" instead. Pick the right tab in Data Source.`);
-      resolved = fallback;
+    // The configured tab must exist exactly — we do NOT silently read another.
+    if (metaInfo.worksheets.length && !metaInfo.worksheets.includes(worksheet)) {
+      throw new SheetsError(
+        `The configured worksheet "${worksheet}" was not found. This app only reads that tab.`,
+        400, 'WORKSHEET_LOCKED',
+      );
     }
 
-    // 3) Read the cells of the resolved worksheet.
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: resolved,
+      range: worksheet,
       valueRenderOption: 'UNFORMATTED_VALUE',
       dateTimeRenderOption: 'FORMATTED_STRING',
     });
     const rows = (res.data.values ?? []).map((r) => (r as unknown[]).map((c) => (c == null ? '' : String(c))));
-    const { bets, warnings: rowWarnings } = normalizeRows(rows);
+    const { bets, warnings } = normalizeRows(rows);
 
     const payload: BetsPayload = {
       bets,
-      warnings: [...warnings, ...rowWarnings],
+      warnings,
       source: config.dataSource,
       syncedAt,
       recordCount: bets.length,
       hash: hashRows(rows),
-      meta: { ...metaInfo, worksheet: resolved },
+      // Only ever expose the one locked tab — never the list of other tabs.
+      meta: { spreadsheetId, spreadsheetTitle: metaInfo.spreadsheetTitle, worksheet, worksheets: [worksheet] },
     };
     responseCache.set(cacheKey, { at: Date.now(), payload });
     return payload;

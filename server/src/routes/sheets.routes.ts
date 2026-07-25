@@ -1,48 +1,41 @@
 import { Router } from 'express';
-import { z } from 'zod';
-import { config, isProd } from '../config.js';
-import { fetchBets, fetchMeta, SheetsError } from '../services/googleSheets.service.js';
+import { config } from '../config.js';
+import { fetchBets, fetchMeta } from '../services/googleSheets.service.js';
 
 export const sheetsRouter = Router();
 
-const querySchema = z.object({
-  spreadsheetId: z.string().trim().optional(),
-  worksheet: z.string().trim().optional(),
-});
-
-/** GET /api/sheets/bets — read + normalize all betting records. */
-sheetsRouter.get('/bets', async (req, res, next) => {
+/**
+ * GET /api/sheets/bets — read the betting records.
+ * The spreadsheet and worksheet are fixed by server config; any query params
+ * are ignored so no client can point the app at another sheet or tab.
+ */
+sheetsRouter.get('/bets', async (_req, res, next) => {
   try {
-    const { spreadsheetId, worksheet } = querySchema.parse(req.query);
-    // In a hosted deployment the data source is fixed by server config —
-    // viewers cannot re-point the app at another spreadsheet via the API.
-    const payload = await fetchBets(isProd() ? {} : { spreadsheetId, worksheet });
+    const payload = await fetchBets();
     res.json(payload);
   } catch (err) {
     next(err);
   }
 });
 
-/** GET /api/sheets/meta — spreadsheet title + worksheet tabs (for the picker). */
-sheetsRouter.get('/meta', async (req, res, next) => {
+/**
+ * GET /api/sheets/meta — spreadsheet title + the single locked worksheet.
+ * Deliberately does NOT return the list of other tabs in the spreadsheet.
+ */
+sheetsRouter.get('/meta', async (_req, res, next) => {
   try {
-    const spreadsheetId = isProd()
-      ? config.defaultSpreadsheetId
-      : String(req.query.spreadsheetId ?? config.defaultSpreadsheetId ?? '');
-    if (!spreadsheetId && config.dataSource !== 'mock')
-      throw new SheetsError('spreadsheetId is required.', 400, 'NO_SPREADSHEET');
-    const meta = await fetchMeta(spreadsheetId);
-    res.json(meta);
+    if (config.dataSource === 'mock') {
+      return res.json({ spreadsheetTitle: 'Sample Betting Log (Demo Data)', worksheet: config.defaultWorksheet });
+    }
+    const meta = await fetchMeta(config.defaultSpreadsheetId);
+    // Strip the full worksheet list — only reveal the one this app is locked to.
+    res.json({ spreadsheetTitle: meta.spreadsheetTitle, worksheet: config.defaultWorksheet });
   } catch (err) {
     next(err);
   }
 });
 
-/** GET /api/sheets/config — tell the client which data source is active. */
+/** GET /api/sheets/config — the fixed data source (no spreadsheet id exposed). */
 sheetsRouter.get('/config', (_req, res) => {
-  res.json({
-    dataSource: config.dataSource,
-    defaultSpreadsheetId: config.defaultSpreadsheetId,
-    defaultWorksheet: config.defaultWorksheet,
-  });
+  res.json({ dataSource: config.dataSource, worksheet: config.defaultWorksheet });
 });

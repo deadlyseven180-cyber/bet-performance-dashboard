@@ -20,10 +20,9 @@ export const sessionApi = {
 
 export const sheetsApi = {
   getConfig: () => apiGet<AppConfig>('/sheets/config'),
-  getBets: (spreadsheetId?: string, worksheet?: string) =>
-    apiGet<BetsPayload>('/sheets/bets', { spreadsheetId, worksheet }),
-  getMeta: (spreadsheetId?: string) =>
-    apiGet<SheetMeta>('/sheets/meta', { spreadsheetId }),
+  // The data source is fixed server-side; no params are sent or accepted.
+  getBets: () => apiGet<BetsPayload>('/sheets/bets'),
+  getMeta: () => apiGet<Pick<SheetMeta, 'spreadsheetTitle' | 'worksheet'>>('/sheets/meta'),
   authStatus: () => apiGet<AuthStatus>('/auth/status'),
   logout: () => apiPost<{ ok: boolean }>('/auth/logout'),
 };
