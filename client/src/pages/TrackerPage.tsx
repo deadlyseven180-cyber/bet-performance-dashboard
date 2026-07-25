@@ -27,9 +27,9 @@ const DEFAULT_UNIT_SIZE = 1000;
 const rep = (n: number) => `$${Math.round(n).toLocaleString('en-AU')}`;
 
 /**
- * Build the plain-text "missing bets" report for a day — only bets that are
- * short of their target (plus manual not-placed ones), grouped by service.
- * This is what the Share button copies / sends to the group chat.
+ * Build the plain-text report for a day — bets that are short of target (plus
+ * manual not-placed ones), and separately any bets that were overstaked,
+ * grouped by service. This is what the Share button copies to the group chat.
  */
 function buildMissingReport(opts: {
   day: string; services: string[]; bets: import('@/types').Bet[];
@@ -37,38 +37,54 @@ function buildMissingReport(opts: {
   manualBets: ManualBet[]; defaultUnitSize: number; title?: string;
 }): string {
   const { day, services, bets, unitSizes, betUnits, manualBets, defaultUnitSize, title } = opts;
-  const head = `⚠️ MISSING BETS — ${formatDate(day)}${title ? `\n${title}` : ''}`;
-  const blocks: string[] = [];
-  let grand = 0;
+  const missBlocks: string[] = [];
+  const overBlocks: string[] = [];
+  let grandMiss = 0;
+  let grandOver = 0;
 
   for (const svc of services) {
     const unit = unitSizes[svc] ?? defaultUnitSize;
     const groups = groupDuplicateBets(bets.filter((b) => b.service === svc && b.date === day));
-    const lines: string[] = [];
-    let svcMissing = 0;
+    const missLines: string[] = [];
+    const overLines: string[] = [];
+    let svcMiss = 0;
+    let svcOver = 0;
 
     for (const g of groups) {
       const t = unit * (betUnits[betGroupKey(g)] ?? 1);
       const missing = t - g.stake;
+      const over = g.stake - t;
       if (missing > 0.5) {
-        lines.push(`• ${g.selection} — need ${rep(missing)} more (${rep(g.stake)}/${rep(t)})`);
-        svcMissing += missing;
+        missLines.push(`• ${g.selection} — need ${rep(missing)} more (${rep(g.stake)}/${rep(t)})`);
+        svcMiss += missing;
+      } else if (over > 0.5) {
+        overLines.push(`• ${g.selection} — +${rep(over)} over (${rep(g.stake)}/${rep(t)})`);
+        svcOver += over;
       }
     }
     for (const m of manualBets.filter((x) => x.day === day && x.service === svc)) {
       const t = unit * m.units;
-      lines.push(`• ${m.name} — NOT PLACED (${rep(t)})`);
-      svcMissing += t;
+      missLines.push(`• ${m.name} — NOT PLACED (${rep(t)})`);
+      svcMiss += t;
     }
 
-    if (lines.length) {
-      grand += svcMissing;
-      blocks.push(`${svc} — missing ${rep(svcMissing)}\n${lines.join('\n')}`);
-    }
+    if (missLines.length) { grandMiss += svcMiss; missBlocks.push(`${svc} — missing ${rep(svcMiss)}\n${missLines.join('\n')}`); }
+    if (overLines.length) { grandOver += svcOver; overBlocks.push(`${svc} — over ${rep(svcOver)}\n${overLines.join('\n')}`); }
   }
 
-  if (!blocks.length) return `✅ All bets fully placed — ${formatDate(day)}${title ? `\n${title}` : ''}`;
-  return `${head}\n\n${blocks.join('\n\n')}\n\nTOTAL MISSING: ${rep(grand)}`;
+  if (!missBlocks.length && !overBlocks.length) {
+    return `✅ All bets fully placed — ${formatDate(day)}${title ? `\n${title}` : ''}`;
+  }
+
+  const out: string[] = [`📋 BET REPORT — ${formatDate(day)}`];
+  if (title) out.push(title);
+  if (missBlocks.length) {
+    out.push('', '⚠️ MISSING', ...missBlocks.map((b) => `\n${b}`), '', `TOTAL MISSING: ${rep(grandMiss)}`);
+  }
+  if (overBlocks.length) {
+    out.push('', '🔵 OVERSTAKED', ...overBlocks.map((b) => `\n${b}`), '', `TOTAL OVER: ${rep(grandOver)}`);
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /**
@@ -157,8 +173,8 @@ export function TrackerPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={shareReport} disabled={sharing || !day} className="btn-primary" title="Copy a report of the missing bets to share">
-            {sharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />} Share missing
+          <button onClick={shareReport} disabled={sharing || !day} className="btn-primary" title="Copy a report of missing & overstaked bets to share">
+            {sharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />} Share report
           </button>
           <button onClick={() => setEditing((e) => !e)} className={clsx('btn-ghost', editing && 'border-brand-300 text-brand-700 dark:text-brand-300')}>
             <Target className="h-4 w-4" /> Services & unit size
