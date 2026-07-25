@@ -31,9 +31,9 @@ export async function apiGet<T>(path: string, params?: Record<string, string | u
   return data as T;
 }
 
-export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(BASE + path, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: body ? JSON.stringify(body) : undefined,
@@ -43,3 +43,6 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   if (!res.ok) throw new ApiError(data?.error ?? 'Request failed', res.status, data?.code);
   return data as T;
 }
+
+export const apiPost = <T>(path: string, body?: unknown) => send<T>('POST', path, body);
+export const apiPut = <T>(path: string, body?: unknown) => send<T>('PUT', path, body);

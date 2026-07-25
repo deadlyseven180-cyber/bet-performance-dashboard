@@ -9,6 +9,7 @@ import { config, isProd } from './config.js';
 import { sheetsRouter } from './routes/sheets.routes.js';
 import { authRouter } from './routes/auth.routes.js';
 import { sessionRouter } from './routes/session.routes.js';
+import { configRouter } from './routes/config.routes.js';
 import { requireAuth, authRequired } from './middleware/appAuth.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
@@ -35,6 +36,7 @@ app.use('/api/auth', authRouter);
 
 // Data endpoints require a valid session when APP_PASSWORD is set.
 app.use('/api/sheets', requireAuth, sheetsRouter);
+app.use('/api/config', requireAuth, configRouter);
 
 app.use('/api', notFound);
 

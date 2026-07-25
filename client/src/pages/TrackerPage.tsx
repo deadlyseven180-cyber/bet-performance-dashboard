@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, X, Target, CalendarDays, Share2, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Target, CalendarDays, Share2, Loader2, Cloud } from 'lucide-react';
 import clsx from 'clsx';
 import { useData } from '@/context/DataContext';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useTrackerConfig, type ManualBet } from '@/hooks/useTrackerConfig';
 import { useToast } from '@/components/ui/Toast';
 import { groupDuplicateBets, betGroupKey, distinctValues, type BetGroup } from '@/services/analytics';
 import { shareText } from '@/services/captureShare';
@@ -10,18 +10,12 @@ import { SectionCard } from '@/components/ui/primitives';
 import { ErrorBanner } from '@/components/dashboard/StatusBanners';
 import { money, moneyKpi, formatDate, decimalOdds, STATUS_LABEL, STATUS_STYLE, profitColor } from '@/utils/format';
 
-interface ManualBet {
-  id: string;
-  day: string;
-  service: string;
-  name: string;
-  units: number;
-}
-
-const DEFAULT_SERVICES = ['60% Dude', 'SAIYAN', 'Lyno'];
-/** Value of one full unit (1u) per service. */
-const DEFAULT_UNIT_SIZES: Record<string, number> = { '60% Dude': 3000, SAIYAN: 1500, Lyno: 2000 };
 const DEFAULT_UNIT_SIZE = 1000;
+const UNIT_PRESETS = [0.25, 0.5, 1, 1.5, 2, 3];
+const REASON_PRESETS = [
+  'Line moved', 'Odds dropped', 'Account limited', 'Bookie suspended',
+  'Max bet reached', 'No time / missed', 'Bet not available',
+];
 
 /** Whole dollars, no cents, for a compact chat report. */
 const rep = (n: number) => `$${Math.round(n).toLocaleString('en-AU')}`;
@@ -36,20 +30,21 @@ function reportName(selection: string): string {
 }
 
 /**
- * Build the plain-text report for a day — bets that are short of target (plus
- * manual not-placed ones), and separately any bets that were overstaked,
- * grouped by service. This is what the Share button copies to the group chat.
+ * Build the plain-text report for a day — bets short of target (plus manual
+ * not-placed ones, each with its reason if given), and separately overstaked
+ * bets, grouped by service. This is what Share copies to the group chat.
  */
 function buildMissingReport(opts: {
   day: string; services: string[]; bets: import('@/types').Bet[];
   unitSizes: Record<string, number>; betUnits: Record<string, number>;
-  manualBets: ManualBet[]; defaultUnitSize: number; title?: string;
+  manualBets: ManualBet[]; reasons: Record<string, string>; defaultUnitSize: number; title?: string;
 }): string {
-  const { day, services, bets, unitSizes, betUnits, manualBets, defaultUnitSize, title } = opts;
+  const { day, services, bets, unitSizes, betUnits, manualBets, reasons, defaultUnitSize, title } = opts;
   const missBlocks: string[] = [];
   const overBlocks: string[] = [];
   let grandMiss = 0;
   let grandOver = 0;
+  const why = (key: string) => (reasons[key]?.trim() ? ` — ${reasons[key].trim()}` : '');
 
   for (const svc of services) {
     const unit = unitSizes[svc] ?? defaultUnitSize;
@@ -64,7 +59,7 @@ function buildMissingReport(opts: {
       const missing = t - g.stake;
       const over = g.stake - t;
       if (missing > 0.5) {
-        missLines.push(`• ${reportName(g.selection)} need ${rep(missing)} more (${rep(g.stake)}/${rep(t)})`);
+        missLines.push(`• ${reportName(g.selection)} need ${rep(missing)} more (${rep(g.stake)}/${rep(t)})${why(betGroupKey(g))}`);
         svcMiss += missing;
       } else if (over > 0.5) {
         overLines.push(`• ${reportName(g.selection)} +${rep(over)} over (${rep(g.stake)}/${rep(t)})`);
@@ -73,7 +68,7 @@ function buildMissingReport(opts: {
     }
     for (const m of manualBets.filter((x) => x.day === day && x.service === svc)) {
       const t = unit * m.units;
-      missLines.push(`• ${m.name} NOT PLACED (${rep(t)})`);
+      missLines.push(`• ${m.name} NOT PLACED (${rep(t)})${why(m.id)}`);
       svcMiss += t;
     }
 
@@ -84,35 +79,36 @@ function buildMissingReport(opts: {
   if (!missBlocks.length && !overBlocks.length) {
     return `✅ All bets fully placed — ${formatDate(day)}${title ? `\n${title}` : ''}`;
   }
-
   const out: string[] = [`📋 BET REPORT — ${formatDate(day)}`];
   if (title) out.push(title);
-  if (missBlocks.length) {
-    out.push('', '⚠️ MISSING', ...missBlocks.map((b) => `\n${b}`), '', `TOTAL MISSING: ${rep(grandMiss)}`);
-  }
-  if (overBlocks.length) {
-    out.push('', '🔵 OVERSTAKED', ...overBlocks.map((b) => `\n${b}`), '', `TOTAL OVER: ${rep(grandOver)}`);
-  }
+  if (missBlocks.length) out.push('', '⚠️ MISSING', ...missBlocks.map((b) => `\n${b}`), '', `TOTAL MISSING: ${rep(grandMiss)}`);
+  if (overBlocks.length) out.push('', '🔵 OVERSTAKED', ...overBlocks.map((b) => `\n${b}`), '', `TOTAL OVER: ${rep(grandOver)}`);
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /**
- * Per-service bet tracker. Each service has a 1-unit stake; each individual
- * bet has a unit multiplier (default 1u, editable — e.g. 0.5u). The target for
- * a bet is unitSize × units, and "missing" is target − what was actually
- * placed across all accounts. Everything recalculates live as units change.
+ * Per-service bet tracker. Config (services, unit sizes, per-bet units, manual
+ * bets, reasons) lives in a shared store so every device and viewer sees the
+ * same thing. Each service has a 1-unit stake; each bet has a unit multiplier;
+ * target = unitSize × units and "missing" = target − placed.
  */
 export function TrackerPage() {
   const { bets, payload } = useData();
   const toast = useToast();
-  const [services, setServices] = useLocalStorage<string[]>('tracker.services', DEFAULT_SERVICES);
-  const [unitSizes, setUnitSizes] = useLocalStorage<Record<string, number>>('tracker.targets', DEFAULT_UNIT_SIZES);
-  const [betUnits, setBetUnits] = useLocalStorage<Record<string, number>>('tracker.betUnits', {});
-  // Bets that were meant to be placed but never made it into the sheet — added
-  // by hand so they still count toward the day's "missing".
-  const [manualBets, setManualBets] = useLocalStorage<ManualBet[]>('tracker.manual', []);
+  const { cfg, update, shared } = useTrackerConfig();
+  const { services, unitSizes, betUnits, manualBets, reasons } = cfg;
+
   const [editing, setEditing] = useState(false);
   const [sharing, setSharing] = useState(false);
+
+  const setServices = (fn: (s: string[]) => string[]) => update((p) => ({ ...p, services: fn(p.services) }));
+  const setUnitSizes = (fn: (s: Record<string, number>) => Record<string, number>) => update((p) => ({ ...p, unitSizes: fn(p.unitSizes) }));
+  const setUnits = (key: string, units: number) => update((p) => ({ ...p, betUnits: { ...p.betUnits, [key]: units } }));
+  const setReason = (key: string, text: string) => update((p) => {
+    const next = { ...p.reasons };
+    if (text.trim()) next[key] = text; else delete next[key];
+    return { ...p, reasons: next };
+  });
 
   const days = useMemo(() => {
     const set = new Set<string>();
@@ -122,17 +118,14 @@ export function TrackerPage() {
 
   const [dayIdx, setDayIdx] = useState(0);
   const day = days[Math.min(dayIdx, Math.max(0, days.length - 1))] ?? null;
-
   const unitSizeFor = (svc: string) => (unitSizes[svc] ?? DEFAULT_UNIT_SIZE);
-  const setUnits = (key: string, units: number) =>
-    setBetUnits((m) => ({ ...m, [key]: units }));
 
   const addManual = (svc: string, name: string, units: number) => {
     if (!day || !name.trim()) return;
     const id = `${day}|${svc}|${name}|${Math.round(Math.random() * 1e9)}`;
-    setManualBets((list) => [...list, { id, day, service: svc, name: name.trim(), units }]);
+    update((p) => ({ ...p, manualBets: [...p.manualBets, { id, day, service: svc, name: name.trim(), units }] }));
   };
-  const removeManual = (id: string) => setManualBets((list) => list.filter((m) => m.id !== id));
+  const removeManual = (id: string) => update((p) => ({ ...p, manualBets: p.manualBets.filter((m) => m.id !== id) }));
 
   const allServices = useMemo(() => distinctValues(bets, 'service'), [bets]);
   const addable = allServices.filter((s) => !services.includes(s));
@@ -142,7 +135,7 @@ export function TrackerPage() {
     setSharing(true);
     try {
       const report = buildMissingReport({
-        day, services, bets, unitSizes, betUnits, manualBets,
+        day, services, bets, unitSizes, betUnits, manualBets, reasons,
         defaultUnitSize: DEFAULT_UNIT_SIZE, title: payload?.meta.spreadsheetTitle,
       });
       const result = await shareText(report, `missing-bets-${day}`);
@@ -152,8 +145,7 @@ export function TrackerPage() {
           : result === 'downloaded' ? 'Saved as a .txt file.' : 'Pick your group chat to send it.',
       );
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Could not build the report.';
-      toast.error('Share failed', msg);
+      toast.error('Share failed', err instanceof Error ? err.message : 'Could not build the report.');
     } finally {
       setSharing(false);
     }
@@ -162,9 +154,8 @@ export function TrackerPage() {
   return (
     <div className="space-y-5">
       <ErrorBanner />
-      <datalist id="unit-presets">
-        {UNIT_PRESETS.map((u) => <option key={u} value={u} />)}
-      </datalist>
+      <datalist id="unit-presets">{UNIT_PRESETS.map((u) => <option key={u} value={u} />)}</datalist>
+      <datalist id="reason-presets">{REASON_PRESETS.map((r) => <option key={r} value={r} />)}</datalist>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1">
@@ -182,6 +173,11 @@ export function TrackerPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {shared && (
+            <span className="hidden items-center gap-1 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400 sm:flex" title="Config is shared across all devices and viewers">
+              <Cloud className="h-3.5 w-3.5" /> Shared
+            </span>
+          )}
           <button onClick={shareReport} disabled={sharing || !day} className="btn-primary" title="Copy a report of missing & overstaked bets to share">
             {sharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />} Share report
           </button>
@@ -192,7 +188,7 @@ export function TrackerPage() {
       </div>
 
       {editing && (
-        <SectionCard title="Tracked services" subtitle="Set the value of one full unit (1u) per service. Per-bet units are set on each row below.">
+        <SectionCard title="Tracked services" subtitle="Set the value of one full unit (1u) per service. Shared across everyone.">
           <div className="space-y-2">
             {services.map((svc) => (
               <div key={svc} className="flex items-center gap-3">
@@ -213,7 +209,6 @@ export function TrackerPage() {
               </div>
             ))}
           </div>
-
           {addable.length > 0 && (
             <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
               <Plus className="h-4 w-4 text-slate-400" />
@@ -237,9 +232,7 @@ export function TrackerPage() {
               <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{payload?.meta.spreadsheetTitle ?? 'Bet Tracker'}</p>
               <p className="label-micro">Bet tracker · {formatDate(day)}</p>
             </div>
-            <div className="text-right">
-              <DayTotal services={services} day={day} bets={bets} unitSizes={unitSizes} betUnits={betUnits} manualBets={manualBets} defaultUnitSize={DEFAULT_UNIT_SIZE} />
-            </div>
+            <DayTotal services={services} day={day} bets={bets} unitSizes={unitSizes} betUnits={betUnits} manualBets={manualBets} defaultUnitSize={DEFAULT_UNIT_SIZE} />
           </div>
 
           {services.map((svc) => (
@@ -250,7 +243,9 @@ export function TrackerPage() {
               bets={bets}
               unitSize={unitSizeFor(svc)}
               betUnits={betUnits}
+              reasons={reasons}
               setUnits={setUnits}
+              setReason={setReason}
               manual={manualBets.filter((m) => m.service === svc && m.day === day)}
               onAddManual={(name, units) => addManual(svc, name, units)}
               onRemoveManual={removeManual}
@@ -262,7 +257,7 @@ export function TrackerPage() {
   );
 }
 
-/** Grand total across all tracked services for the header / screenshot. */
+/** Grand total across all tracked services. */
 function DayTotal({ services, day, bets, unitSizes, betUnits, manualBets, defaultUnitSize }: {
   services: string[]; day: string; bets: import('@/types').Bet[];
   unitSizes: Record<string, number>; betUnits: Record<string, number>; manualBets: ManualBet[]; defaultUnitSize: number;
@@ -287,7 +282,7 @@ function DayTotal({ services, day, bets, unitSizes, betUnits, manualBets, defaul
   }, [services, day, bets, unitSizes, betUnits, manualBets, defaultUnitSize]);
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex items-center gap-4 text-right">
       <div><p className="label-micro">Placed</p><p className="text-sm font-bold tabular-nums text-slate-800 dark:text-slate-100">{moneyKpi(placed)}</p></div>
       <div><p className="label-micro">Missing</p><p className={clsx('text-sm font-bold tabular-nums', missing > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400')}>{moneyKpi(missing)}</p></div>
       {over > 0 && <div><p className="label-micro">Over</p><p className="text-sm font-bold tabular-nums text-sky-600 dark:text-sky-400">{moneyKpi(over)}</p></div>}
@@ -295,9 +290,10 @@ function DayTotal({ services, day, bets, unitSizes, betUnits, manualBets, defaul
   );
 }
 
-function ServiceDay({ service, day, bets, unitSize, betUnits, setUnits, manual, onAddManual, onRemoveManual }: {
+function ServiceDay({ service, day, bets, unitSize, betUnits, reasons, setUnits, setReason, manual, onAddManual, onRemoveManual }: {
   service: string; day: string; bets: import('@/types').Bet[];
-  unitSize: number; betUnits: Record<string, number>; setUnits: (key: string, units: number) => void;
+  unitSize: number; betUnits: Record<string, number>; reasons: Record<string, string>;
+  setUnits: (key: string, units: number) => void; setReason: (key: string, text: string) => void;
   manual: ManualBet[]; onAddManual: (name: string, units: number) => void; onRemoveManual: (id: string) => void;
 }) {
   const [adding, setAdding] = useState(false);
@@ -319,12 +315,7 @@ function ServiceDay({ service, day, bets, unitSize, betUnits, setUnits, manual, 
       over += Math.max(0, g.stake - t);
       profit += g.status === 'pending' || g.status === 'unknown' ? 0 : g.profit;
     }
-    // Manual "not placed" bets: nothing placed, whole target is missing.
-    for (const m of manual) {
-      const t = unitSize * m.units;
-      target += t;
-      missing += t;
-    }
+    for (const m of manual) { target += unitSize * m.units; missing += unitSize * m.units; }
     return { placed, missing, over, profit, target };
   }, [groups, unitSize, betUnits, manual]);
 
@@ -374,19 +365,27 @@ function ServiceDay({ service, day, bets, unitSize, betUnits, setUnits, manual, 
                     g={g}
                     unitSize={unitSize}
                     units={betUnits[key] ?? 1}
+                    reason={reasons[key] ?? ''}
                     onUnits={(u) => setUnits(key, u)}
+                    onReason={(t) => setReason(key, t)}
                   />
                 );
               })}
               {manual.map((m) => (
-                <ManualRow key={m.id} m={m} unitSize={unitSize} onRemove={() => onRemoveManual(m.id)} />
+                <ManualRow
+                  key={m.id}
+                  m={m}
+                  unitSize={unitSize}
+                  reason={reasons[m.id] ?? ''}
+                  onReason={(t) => setReason(m.id, t)}
+                  onRemove={() => onRemoveManual(m.id)}
+                />
               ))}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Manually log a bet that should have been placed but wasn't in the sheet */}
       <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
         {adding ? (
           <div className="flex flex-wrap items-center gap-2">
@@ -416,8 +415,24 @@ function ServiceDay({ service, day, bets, unitSize, betUnits, setUnits, manual, 
   );
 }
 
-/** A bet that was meant to be placed but never made it into the sheet. */
-function ManualRow({ m, unitSize, onRemove }: { m: ManualBet; unitSize: number; onRemove: () => void }) {
+/** Compact reason picker shown on bets that aren't fully placed. */
+function ReasonInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      list="reason-presets"
+      placeholder="Reason it's short…"
+      className="input mt-1.5 w-full py-0.5 text-[11px]"
+      title="Why this bet couldn't be fully placed"
+    />
+  );
+}
+
+function ManualRow({ m, unitSize, reason, onReason, onRemove }: {
+  m: ManualBet; unitSize: number; reason: string; onReason: (t: string) => void; onRemove: () => void;
+}) {
   const target = unitSize * m.units;
   return (
     <tr className="border-b border-amber-100 bg-amber-50/40 dark:border-amber-500/20 dark:bg-amber-500/5">
@@ -426,6 +441,7 @@ function ManualRow({ m, unitSize, onRemove }: { m: ManualBet; unitSize: number; 
           <span className="block truncate font-medium text-slate-700 dark:text-slate-200" title={m.name}>{m.name}</span>
           <button onClick={onRemove} className="text-slate-400 hover:text-rose-500" title="Remove"><X className="h-3 w-3" /></button>
         </span>
+        <ReasonInput value={reason} onChange={onReason} />
       </td>
       <td className="py-2 pr-2 text-right tabular-nums text-slate-400">0</td>
       <td className="py-2 pr-2 text-right tabular-nums text-slate-400">{money(0)}</td>
@@ -439,10 +455,8 @@ function ManualRow({ m, unitSize, onRemove }: { m: ManualBet; unitSize: number; 
   );
 }
 
-const UNIT_PRESETS = [0.25, 0.5, 1, 1.5, 2, 3];
-
-function BetRow({ g, unitSize, units, onUnits }: {
-  g: BetGroup; unitSize: number; units: number; onUnits: (u: number) => void;
+function BetRow({ g, unitSize, units, reason, onUnits, onReason }: {
+  g: BetGroup; unitSize: number; units: number; reason: string; onUnits: (u: number) => void; onReason: (t: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const target = unitSize * units;
@@ -454,38 +468,36 @@ function BetRow({ g, unitSize, units, onUnits }: {
   return (
     <>
       <tr className="border-b border-slate-50 hover:bg-brand-50/40 dark:border-slate-800/60 dark:hover:bg-slate-800/50">
-        <td className="max-w-[260px] cursor-pointer py-2 pr-2" onClick={() => setOpen((o) => !o)} title="Click to see each account's placement">
-          <span className="block truncate font-medium text-slate-700 dark:text-slate-200" title={g.selection}>{g.selection || '—'}</span>
-          <span className="mt-1 block h-1 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+        <td className="max-w-[260px] py-2 pr-2 align-top">
+          <span className="block cursor-pointer truncate font-medium text-slate-700 dark:text-slate-200" title={g.selection} onClick={() => setOpen((o) => !o)}>{g.selection || '—'}</span>
+          <span className="mt-1 block h-1 w-full cursor-pointer overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" onClick={() => setOpen((o) => !o)}>
             <span className={clsx('block h-full rounded-full', barTone)} style={{ width: `${pct}%` }} />
           </span>
+          {/* Reason only for bets that aren't fully placed */}
+          {missing > 0 && <ReasonInput value={reason} onChange={onReason} />}
         </td>
-        <td className="cursor-pointer py-2 pr-2 text-right tabular-nums text-slate-500" onClick={() => setOpen((o) => !o)}>{g.placements}</td>
-        <td className="cursor-pointer py-2 pr-2 text-right tabular-nums font-medium text-slate-700 dark:text-slate-200" onClick={() => setOpen((o) => !o)}>{money(g.stake)}</td>
-        <td className="py-2 pr-2">
-          {/* Per-bet unit multiplier — edit to auto-recalc target & missing */}
+        <td className="cursor-pointer py-2 pr-2 text-right align-top tabular-nums text-slate-500" onClick={() => setOpen((o) => !o)}>{g.placements}</td>
+        <td className="cursor-pointer py-2 pr-2 text-right align-top tabular-nums font-medium text-slate-700 dark:text-slate-200" onClick={() => setOpen((o) => !o)}>{money(g.stake)}</td>
+        <td className="py-2 pr-2 align-top">
           <div className="flex items-center justify-center gap-1">
             <input
               type="number" min={0} step={0.25} value={units}
               onChange={(e) => onUnits(Math.max(0, Number(e.target.value)))}
               className="input no-spinner w-14 px-1.5 py-1 text-center text-xs tabular-nums"
-              list="unit-presets"
-              title="Units required for this bet"
+              list="unit-presets" title="Units required for this bet"
             />
             <span className="text-xs text-slate-400">u</span>
           </div>
         </td>
-        <td className="py-2 pr-2 text-right tabular-nums text-slate-400">{money(target)}</td>
+        <td className="py-2 pr-2 text-right align-top tabular-nums text-slate-400">{money(target)}</td>
         <td
-          className={clsx('py-2 pr-2 text-right tabular-nums font-semibold',
-            missing > 0 ? 'text-amber-600 dark:text-amber-400'
-              : over > 0 ? 'text-sky-600 dark:text-sky-400'
-              : 'text-emerald-600 dark:text-emerald-400')}
+          className={clsx('py-2 pr-2 text-right align-top tabular-nums font-semibold',
+            missing > 0 ? 'text-amber-600 dark:text-amber-400' : over > 0 ? 'text-sky-600 dark:text-sky-400' : 'text-emerald-600 dark:text-emerald-400')}
           title={over > 0 ? `Overstaked by ${money(over)}` : missing > 0 ? `Short by ${money(missing)}` : 'Fully placed'}
         >
           {missing > 0 ? money(missing) : over > 0 ? `+${money(over)}` : '✓ full'}
         </td>
-        <td className="cursor-pointer py-2 pr-1 text-right" onClick={() => setOpen((o) => !o)}>
+        <td className="cursor-pointer py-2 pr-1 text-right align-top" onClick={() => setOpen((o) => !o)}>
           <span className={clsx('chip', STATUS_STYLE[g.status])}>{STATUS_LABEL[g.status]}</span>
         </td>
       </tr>

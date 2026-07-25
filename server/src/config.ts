@@ -49,6 +49,12 @@ export const config = {
   // dev stays frictionless.
   appPassword: asString(process.env.APP_PASSWORD),
   sessionSecret: asString(process.env.SESSION_SECRET, 'dev-insecure-secret-change-me'),
+
+  // Shared config store (Supabase). When set, the bet-tracker config is stored
+  // here so it's shared across every device and viewer. Both local and hosted
+  // servers point at the same project, so changes sync everywhere.
+  supabaseUrl: asString(process.env.SUPABASE_URL),
+  supabaseKey: asString(process.env.SUPABASE_ANON_KEY),
 };
 
 /** True in a hosted/production environment. */
