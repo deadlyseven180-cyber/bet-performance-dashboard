@@ -34,7 +34,9 @@ function normalizeSelection(s: string): string {
  * label itself identifies the bet. When present it takes precedence over the
  * selection text as the matching key.
  */
-const BET_LABEL = /^\s*bet\s*#?\s*(\d+)\s*[:\-]/i;
+// Matches "BET 1 : …", "BET 21 Smith/…", "BET#3-…" — the number is the id.
+// Requires a boundary after "bet" so bookmaker names like "Bet365…" don't match.
+const BET_LABEL = /^\s*bet\b[\s#:.\-]*(\d+)\b/i;
 
 function selectionKey(selection: string): string {
   const m = String(selection || '').match(BET_LABEL);

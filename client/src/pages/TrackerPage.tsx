@@ -1,11 +1,11 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, X, Target, CalendarDays, Share2, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import { useData } from '@/context/DataContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useToast } from '@/components/ui/Toast';
 import { groupDuplicateBets, betGroupKey, distinctValues, type BetGroup } from '@/services/analytics';
-import { captureToBlob, shareImage } from '@/services/captureShare';
+import { shareText } from '@/services/captureShare';
 import { SectionCard } from '@/components/ui/primitives';
 import { ErrorBanner } from '@/components/dashboard/StatusBanners';
 import { money, moneyKpi, formatDate, decimalOdds, STATUS_LABEL, STATUS_STYLE, profitColor } from '@/utils/format';
@@ -22,6 +22,54 @@ const DEFAULT_SERVICES = ['60% Dude', 'SAIYAN', 'Lyno'];
 /** Value of one full unit (1u) per service. */
 const DEFAULT_UNIT_SIZES: Record<string, number> = { '60% Dude': 3000, SAIYAN: 1500, Lyno: 2000 };
 const DEFAULT_UNIT_SIZE = 1000;
+
+/** Whole dollars, no cents, for a compact chat report. */
+const rep = (n: number) => `$${Math.round(n).toLocaleString('en-AU')}`;
+
+/**
+ * Build the plain-text "missing bets" report for a day — only bets that are
+ * short of their target (plus manual not-placed ones), grouped by service.
+ * This is what the Share button copies / sends to the group chat.
+ */
+function buildMissingReport(opts: {
+  day: string; services: string[]; bets: import('@/types').Bet[];
+  unitSizes: Record<string, number>; betUnits: Record<string, number>;
+  manualBets: ManualBet[]; defaultUnitSize: number; title?: string;
+}): string {
+  const { day, services, bets, unitSizes, betUnits, manualBets, defaultUnitSize, title } = opts;
+  const head = `⚠️ MISSING BETS — ${formatDate(day)}${title ? `\n${title}` : ''}`;
+  const blocks: string[] = [];
+  let grand = 0;
+
+  for (const svc of services) {
+    const unit = unitSizes[svc] ?? defaultUnitSize;
+    const groups = groupDuplicateBets(bets.filter((b) => b.service === svc && b.date === day));
+    const lines: string[] = [];
+    let svcMissing = 0;
+
+    for (const g of groups) {
+      const t = unit * (betUnits[betGroupKey(g)] ?? 1);
+      const missing = t - g.stake;
+      if (missing > 0.5) {
+        lines.push(`• ${g.selection} — need ${rep(missing)} more (${rep(g.stake)}/${rep(t)})`);
+        svcMissing += missing;
+      }
+    }
+    for (const m of manualBets.filter((x) => x.day === day && x.service === svc)) {
+      const t = unit * m.units;
+      lines.push(`• ${m.name} — NOT PLACED (${rep(t)})`);
+      svcMissing += t;
+    }
+
+    if (lines.length) {
+      grand += svcMissing;
+      blocks.push(`${svc} — missing ${rep(svcMissing)}\n${lines.join('\n')}`);
+    }
+  }
+
+  if (!blocks.length) return `✅ All bets fully placed — ${formatDate(day)}${title ? `\n${title}` : ''}`;
+  return `${head}\n\n${blocks.join('\n\n')}\n\nTOTAL MISSING: ${rep(grand)}`;
+}
 
 /**
  * Per-service bet tracker. Each service has a 1-unit stake; each individual
@@ -40,7 +88,6 @@ export function TrackerPage() {
   const [manualBets, setManualBets] = useLocalStorage<ManualBet[]>('tracker.manual', []);
   const [editing, setEditing] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const captureRef = useRef<HTMLDivElement>(null);
 
   const days = useMemo(() => {
     const set = new Set<string>();
@@ -65,23 +112,23 @@ export function TrackerPage() {
   const allServices = useMemo(() => distinctValues(bets, 'service'), [bets]);
   const addable = allServices.filter((s) => !services.includes(s));
 
-  const shareSnapshot = async () => {
-    if (!captureRef.current || sharing) return;
+  const shareReport = async () => {
+    if (!day || sharing) return;
     setSharing(true);
     try {
-      const dark = document.documentElement.classList.contains('dark');
-      const bg = dark ? '#0f141a' : '#f6f7f8';
-      const blob = await captureToBlob(captureRef.current, bg);
-      const fname = `bets-${day ?? 'day'}.png`;
-      const result = await shareImage(blob, fname, `Bet tracker — ${day ? formatDate(day) : ''}`);
+      const report = buildMissingReport({
+        day, services, bets, unitSizes, betUnits, manualBets,
+        defaultUnitSize: DEFAULT_UNIT_SIZE, title: payload?.meta.spreadsheetTitle,
+      });
+      const result = await shareText(report, `missing-bets-${day}`);
       toast.success(
-        result === 'shared' ? 'Ready to share' : result === 'copied' ? 'Copied to clipboard' : 'Image downloaded',
+        result === 'shared' ? 'Ready to share' : result === 'copied' ? 'Report copied' : 'Report saved',
         result === 'copied' ? 'Paste it straight into your group chat.'
-          : result === 'downloaded' ? 'Saved as PNG — attach it in your chat.' : 'Pick your group chat to send it.',
+          : result === 'downloaded' ? 'Saved as a .txt file.' : 'Pick your group chat to send it.',
       );
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Could not generate the image.';
-      toast.error('Screenshot failed', msg);
+      const msg = err instanceof Error ? err.message : 'Could not build the report.';
+      toast.error('Share failed', msg);
     } finally {
       setSharing(false);
     }
@@ -110,8 +157,8 @@ export function TrackerPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={shareSnapshot} disabled={sharing || !day} className="btn-primary" title="Screenshot the day's bets to share">
-            {sharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />} Share
+          <button onClick={shareReport} disabled={sharing || !day} className="btn-primary" title="Copy a report of the missing bets to share">
+            {sharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />} Share missing
           </button>
           <button onClick={() => setEditing((e) => !e)} className={clsx('btn-ghost', editing && 'border-brand-300 text-brand-700 dark:text-brand-300')}>
             <Target className="h-4 w-4" /> Services & unit size
@@ -158,9 +205,8 @@ export function TrackerPage() {
         <SectionCard><p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No bets found for the tracked services yet.</p></SectionCard>
       )}
 
-      {/* Everything inside this ref is what gets captured for the screenshot */}
       {day && (
-        <div ref={captureRef} className="space-y-5 rounded bg-slate-100 dark:bg-slate-950">
+        <div className="space-y-5">
           <div className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
             <div>
               <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{payload?.meta.spreadsheetTitle ?? 'Bet Tracker'}</p>

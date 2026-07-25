@@ -85,3 +85,32 @@ export async function shareImage(blob: Blob, filename: string, text?: string): P
   downloadBlob(blob, filename);
   return 'downloaded';
 }
+
+/**
+ * Share a plain-text report.
+ *  - Phone/tablet: native share sheet → straight into a chat.
+ *  - Desktop: copy to clipboard (paste into the chat), else download a .txt.
+ * Text is far more robust to share than an image and pastes cleanly.
+ */
+export async function shareText(text: string, title: string): Promise<ShareResult> {
+  const nav = navigator as Navigator & { share?: (d: unknown) => Promise<void> };
+
+  if (isTouchDevice() && nav.share) {
+    try {
+      await nav.share({ text, title });
+      return 'shared';
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return 'shared';
+    }
+  }
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return 'copied';
+    }
+  } catch { /* fall through to download */ }
+
+  downloadBlob(new Blob([text], { type: 'text/plain;charset=utf-8' }), `${title.replace(/[^\w-]+/g, '-')}.txt`);
+  return 'downloaded';
+}
