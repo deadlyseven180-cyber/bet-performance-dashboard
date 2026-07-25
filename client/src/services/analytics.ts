@@ -38,9 +38,26 @@ function normalizeSelection(s: string): string {
 // Requires a boundary after "bet" so bookmaker names like "Bet365…" don't match.
 const BET_LABEL = /^\s*bet\b[\s#:.\-]*(\d+)\b/i;
 
+/** A leg like "Noble u24.5" or "Rowell 22+" carries a line — a prop anchor. */
+function hasLine(s: string): boolean {
+  return /\b[ou]\s*\d+(\.\d+)?\b/i.test(s) || /\d+(\.\d+)?\s*\+/.test(s);
+}
+
 function selectionKey(selection: string): string {
-  const m = String(selection || '').match(BET_LABEL);
-  return m ? `bet ${m[1]}` : normalizeSelection(selection);
+  const raw = String(selection || '');
+  const m = raw.match(BET_LABEL);
+  if (m) return `bet ${m[1]}`;
+  // Same-game bets share an anchor leg ("Noble u24.5") but each account pairs
+  // it with a different second leg ("/Hawk ML", "/Cripps 15+"), so the full
+  // text won't match. When the first leg carries a line, key on that anchor so
+  // those placements group into one bet. Full multis whose first leg has no
+  // line ("Smith/Bruhn/...") are untouched and stay distinct.
+  const first = raw.split('/')[0];
+  if (first && hasLine(first)) {
+    const anchor = normalizeSelection(first);
+    if (anchor) return anchor;
+  }
+  return normalizeSelection(selection);
 }
 
 /** One logical bet, possibly placed across several accounts/lines. */
